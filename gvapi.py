@@ -3,6 +3,8 @@ import requests
 import configparser
 import os
 import json
+from PIL import Image,ImageDraw
+from io import BytesIO
 
 
 SETTINGS_FILE = 'settings.ini'
@@ -89,37 +91,49 @@ def fetch_game_titles(username, password):
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 def save_cache(gid, data):
-    cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
+    cache_file = os.path.join(CACHE_DIR, f"{gid}/{gid}.json")
     with open(cache_file, "w") as file:
         json.dump(data, file)
 
 def load_cache(gid):
-    cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
+    cache_file = os.path.join(CACHE_DIR, f"{gid}/{gid}.json")
     if os.path.exists(cache_file):
         with open(cache_file, "r") as file:
             return json.load(file)
     return None
 
 def clear_cache():
+    # Check if the cache directory exists
     if os.path.exists(CACHE_DIR):
-        # Iterate over all files in the cache directory and remove them
-        for filename in os.listdir(CACHE_DIR):
-            file_path = os.path.join(CACHE_DIR, filename)
-            try:
-                if os.path.isfile(file_path):
+        # Iterate over all files and subdirectories in the cache directory
+        for root, dirs, files in os.walk(CACHE_DIR, topdown=False):
+            # Remove all files in the current directory
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                try:
                     os.remove(file_path)
-            except Exception as e:
-                print(f"Failed to remove {file_path}: {e}")
+                except Exception as e:
+                    print(f"Failed to remove {file_path}: {e}")
+            # Remove the current subdirectory itself
+            for dirname in dirs:
+                dir_path = os.path.join(root, dirname)
+                try:
+                    os.rmdir(dir_path)
+                except Exception as e:
+                    print(f"Failed to remove {dir_path}: {e}")
+        # Print a message indicating that the cache was cleared successfully
         print("Cache cleared successfully.")
     else:
+        # Print a message if the cache directory does not exist
         print("Cache directory does not exist. Nothing to clear.")
+
 
 
 def fetch_game_info(username, password, gid):
     # Check if the response is already in the cache
     cached_data = load_cache(gid)
     if cached_data:
-        print(f"Fetching from cache...{gid}")
+        print(f"Fetching from game info from cache...{gid}")
         return cached_data
 
     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
@@ -142,6 +156,88 @@ def fetch_game_info(username, password, gid):
 
 
 
+
+def get_image(username, password, gid, boxart=False):
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+    cache_folder = os.path.join(CACHE_DIR, str(gid))
+    os.makedirs(cache_folder, exist_ok=True)
+
+    if boxart:
+        cache_path = os.path.join(cache_folder, 'box_art_image.jpg')
+        if os.path.exists(cache_path):
+            # If box art image is cached, return the file path
+            return cache_path
+
+        # Fetch game information to get box art image URL
+        game_info = fetch_game_info(username, password, gid)
+        if game_info and 'box_image' in game_info:
+            box_image_url = game_info['box_image'].get('source')
+            if box_image_url:
+                try:
+                    response = requests.get(box_image_url)
+                    if response.status_code == 200:
+                        image_bytes = BytesIO(response.content)
+                        image = Image.open(image_bytes)
+
+                        # Convert image to RGB mode
+                        if image.mode == 'RGBA':
+                            image = image.convert('RGB')
+
+                        # Cache the image
+                        image.save(cache_path)
+
+                        return cache_path
+                    else:
+                        print(f"Failed to retrieve box art image. Status code: {response.status_code}")
+                except Exception as e:
+                    print(f"An error occurred while fetching box art image: {e}")
+            else:
+                print("Box art image URL not found in game information.")
+        else:
+            print("Box art image information not found in game data.")
+        return None
+    else:
+        cache_path = os.path.join(cache_folder, 'BG_image.jpg')
+        if os.path.exists(cache_path):
+            # If box art image is cached, return the file path
+            print(f"{cache_path}fetching from cache")
+            return cache_path
+
+        # Fetch game information to get box art image URL
+        game_info = fetch_game_info(username, password, gid)
+        if game_info and 'background_image' in game_info:
+            box_image_url = game_info['background_image'].get('source')
+            if box_image_url:
+                try:
+                    response = requests.get(box_image_url)
+                    if response.status_code == 200:
+                        image_bytes = BytesIO(response.content)
+                        image = Image.open(image_bytes)
+
+                        # Convert image to RGB mode
+                        if image.mode == 'RGBA':
+                            image = image.convert('RGB')
+
+                        # Cache the image
+                        image.save(cache_path)
+
+                        return cache_path
+                    else:
+                        print(f"Failed to retrieve box art image. Status code: {response.status_code}")
+                except Exception as e:
+                    print(f"An error occurred while fetching box art image: {e}")
+            else:
+                print("Box art image URL not found in game information.")
+        else:
+            print("Box art image information not found in game data.")
+        return None
+
+
+# # Example usage:
+# image = get_image("user", "pass", 27, boxart=False) #FALSE FOR BG IMAGE
+# print(image)
+
 # Example usage:
 # domain = "http://"
 # is_healthy = check_url_health(f'{domain}/api/health')
@@ -163,3 +259,98 @@ def fetch_game_info(username, password, gid):
 #     print(game_infos)  # Print the fetched game info ['title']
 # else:
 #     print("Failed to fetch game info.")
+    
+
+
+
+
+# def add_gradient(username, password, gid):
+#     print("ADDING GRADIENT TO BOXART")
+#     # Open the image
+#     image_path = get_image(username, password, gid, boxart=False)
+#     if image_path is None:
+#         print("Failed to fetch the image.")
+#         return None
+
+#     image = Image.open(image_path).convert("RGBA")
+#     width, height = image.size
+    
+#     # Calculate the alpha gradient
+#     start_gradient_y = height // 3  # Start the gradient about one-third down the image
+#     for y in range(height):
+#         if y >= start_gradient_y:
+#             # Calculate the alpha value based on the distance from the start of the gradient
+#             alpha = int(255 * (1 - (y - start_gradient_y) / (height - start_gradient_y)) ** 5)  # Adjust the exponent for a more rapid decrease
+            
+#             # Set a minimum threshold for the alpha value
+#             min_alpha = 10  # Adjust as needed
+#             alpha = max(alpha, min_alpha)  # Ensure the alpha value doesn't fall below the threshold
+#         else:
+#             alpha = 255  # Full opacity for the top portion of the image
+        
+#         for x in range(width):
+#             r, g, b, _ = image.getpixel((x, y))
+#             image.putpixel((x, y), (r, g, b, alpha))
+    
+#     # Save the resulting image
+#     output_folder = os.path.join(CACHE_DIR, str(gid))
+#     os.makedirs(output_folder, exist_ok=True)
+#     output_path = os.path.join(output_folder, f"{gid}_with_gradient.png")
+#     image.save(output_path)
+#     print(f"Gradient added to image: {output_path}")
+#     return output_path
+
+def add_gradient(username, password, gid):
+    print("radient function running")
+    # Check if the image with gradient already exists in cache
+    output_folder = os.path.join(CACHE_DIR, str(gid))
+    output_path = os.path.join(output_folder, f"{gid}_with_gradient.png")
+    
+    if os.path.exists(output_path):
+        print("Gradient already added to image. Returning cached version.")
+        return output_path
+    
+    # Open the original image
+    print("Gradient function: Opening image...")
+    image_path = get_image(username, password, gid, boxart=False)
+    if image_path is None:
+        print("Failed to fetch the image.")
+        return None
+
+    image = Image.open(image_path).convert("RGBA")
+    width, height = image.size
+    
+    # Calculate the alpha gradient
+    start_gradient_y = height // 3  # Start the gradient about one-third down the image
+    for y in range(height):
+        if y >= start_gradient_y:
+            # Calculate the alpha value based on the distance from the start of the gradient
+            alpha = int(255 * (1 - (y - start_gradient_y) / (height - start_gradient_y)) ** 5)  # Adjust the exponent for a more rapid decrease
+            
+            # Set a minimum threshold for the alpha value
+            min_alpha = 10  # Adjust as needed
+            alpha = max(alpha, min_alpha)  # Ensure the alpha value doesn't fall below the threshold
+        else:
+            alpha = 255  # Full opacity for the top portion of the image
+        
+        for x in range(width):
+            r, g, b, _ = image.getpixel((x, y))
+            image.putpixel((x, y), (r, g, b, alpha))
+    
+    # Save the resulting image
+    os.makedirs(output_folder, exist_ok=True)
+    image.save(output_path)
+    print(f"Gradient added to cache: {output_path}")
+    return output_path
+
+
+
+
+# Example usage:
+image = add_gradient("username", "password", 27) #FALSE FOR BG IMAGE
+print(image)
+
+
+
+
+
