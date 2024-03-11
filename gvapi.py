@@ -5,6 +5,9 @@ import os
 import json
 from PIL import Image,ImageDraw
 from io import BytesIO
+from pySmartDL import SmartDL
+import zipfile
+import patoolib
 
 
 SETTINGS_FILE = 'settings.ini'
@@ -91,12 +94,12 @@ def fetch_game_titles(username, password):
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 def save_cache(gid, data):
-    cache_file = os.path.join(CACHE_DIR, f"{gid}/{gid}.json")
+    cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
     with open(cache_file, "w") as file:
         json.dump(data, file)
 
 def load_cache(gid):
-    cache_file = os.path.join(CACHE_DIR, f"{gid}/{gid}.json")
+    cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
     if os.path.exists(cache_file):
         with open(cache_file, "r") as file:
             return json.load(file)
@@ -346,11 +349,126 @@ def add_gradient(username, password, gid):
 
 
 
-# Example usage:
-image = add_gradient("username", "password", 27) #FALSE FOR BG IMAGE
-print(image)
+# # Example usage:
+# image = add_gradient("username", "password", 27) #FALSE FOR BG IMAGE
+# print(image)
 
 
 
 
 
+# def download_game(username, password, gid, folder_path):
+#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+#     url = f'{URL}/api/games/{gid}/download'
+#     headers = {
+#         'accept': 'application/json',
+#         'Authorization': f'Basic {encoded_credentials}'
+#     }
+#     params = {}
+
+#     try:
+#         response = requests.get(url, params=params, headers=headers)
+#         response.raise_for_status()  # Raises an exception for 4XX or 5XX status codes
+#         file_name = f"game_{gid}.json"  # You can change the filename as needed
+#         file_path = os.path.join(folder_path, file_name)
+#         with open(file_path, 'wb') as file:
+#             file.write(response.content)
+#         print(f"Game downloaded and saved to {file_path}")
+#         return file_path
+#     except requests.exceptions.RequestException as e:
+#         print(f"Error downloading game: {e}")
+#         return None
+
+
+
+def download_game(username, password, gid, force_redownload=False):
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+    url = f'{URL}/api/games/{gid}/download'
+    installfolder = config['SETTINGS'].get('install_location')
+    path = fetch_game_info(username, password, gid)
+    destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
+    
+    # Check if the file already exists and force_redownload is False
+    if not force_redownload and os.path.exists(destination):
+        print("Game already downloaded:", destination)
+        return destination
+    
+    request_args = {"headers": {"Authorization": f'Basic {encoded_credentials}'}}
+    downloader = SmartDL(url, destination, request_args=request_args)
+    downloader.start()  # Starts the downloading process
+    
+    if downloader.isSuccessful():
+        print("Downloaded successfully:", downloader.get_dest())
+        return downloader.get_dest()
+    else:
+        print("Download failed:", downloader.get_errors())
+        return None
+
+
+def install_game(gid):
+    foldername = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    destination = f"{config['SETTINGS'].get('install_location')}/{gid}/{os.path.splitext(os.path.basename(foldername['file_path']))[0]}"
+    gamezip = f"{config['SETTINGS'].get('install_location')}/{gid}/download/{os.path.basename(foldername['file_path'])}"
+    patoolib.extract_archive(gamezip , outdir=destination)
+    open(f"{destination}/example.txt", 'w').close()
+    print("UNZIPPED GAME")
+
+
+
+
+
+
+
+def is_downloaded(gid):
+    installfolder = config['SETTINGS'].get('install_location')
+    path = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
+    return os.path.exists(destination)
+
+def is_installed(gid):
+    installfolder = config['SETTINGS'].get('install_location')
+    path = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    destination = f"{installfolder}/{gid}/.installed"
+    print(f"Checking if {destination} exists...")
+    return os.path.exists(destination)
+
+def get_exes_paths(gid):
+    foldername = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    destination = f"{config['SETTINGS'].get('install_location')}/{gid}/{os.path.splitext(os.path.basename(foldername['file_path']))[0]}"
+    exes = []
+    for root, dirs, files in os.walk(destination):
+        for filename in files:
+            if filename.endswith(".exe"):
+                exes.append(os.path.join(root, filename))
+    return exes
+def get_exes(gid):
+    foldername = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    destination = f"{config['SETTINGS'].get('install_location')}/{gid}/{os.path.splitext(os.path.basename(foldername['file_path']))[0]}"
+    exes = []
+    for root, dirs, files in os.walk(destination):
+        for filename in files:
+            if filename.endswith(".exe"):
+                exes.append(filename)
+    return exes
+
+def save_exe_selection(gid, exe):
+    installfolder = config['SETTINGS'].get('install_location')
+    path = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    destination = f"{installfolder}/{gid}/.installed"
+    with open(destination, 'w') as f:
+        f.write(exe)
+
+def get_exe_selection(gid):
+    installfolder = config['SETTINGS'].get('install_location')
+    destination = f"{installfolder}/{gid}/.installed"
+    with open(destination, 'r') as f:
+        return f.read()
+    
+
+# print(get_exes(27))
+
+
+
+# path = fetch_game_info(username, password, gid)
+# file_name = os.path.basename(path['file_path'])
+# print(file_name)

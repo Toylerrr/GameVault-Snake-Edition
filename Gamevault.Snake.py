@@ -8,6 +8,7 @@ import keyring
 import configparser
 from Settings_Wizard import InstallWizard
 import threading
+import subprocess
 
 
 # Set appearance mode and default color theme
@@ -23,6 +24,7 @@ config.read(SETTINGS_FILE)
 username = config['SETTINGS'].get('username')
 install_location = config['SETTINGS'].get('install_location')
 url = config['SETTINGS'].get('url')
+
 
         
 class App(customtkinter.CTk):
@@ -72,7 +74,7 @@ class App(customtkinter.CTk):
 
         # Help menu
         m3 = tk.Menu(menu_bar, tearoff=0)
-        m3.add_command(label="help!")
+        m3.add_command(label="About",command=self.open_about)
         menu_bar.add_cascade(label="Help",menu=m3)
 
 
@@ -102,7 +104,7 @@ class App(customtkinter.CTk):
             app.description_label.grid_forget()
             app.boxart_label.grid_forget()
             app.bg_label.place_forget()
-            app.download_button.grid_forget()
+            app.action_button.grid_forget()
             self.progressbar_1.place(relx=0.5, rely=0.5, anchor="center")
             self.progressbar_1.start()
             thread_get_game_info = threading.Thread(target=get_game_info, args=(game_id,))
@@ -126,23 +128,41 @@ class App(customtkinter.CTk):
                 
                 # Update the labels in the main frame
                 boxartimg = customtkinter.CTkImage(light_image=Image.open(get_image(username, keyring.get_password("GameVault-Snake", username), game_id, boxart=True)),size=(133, 200))
-                # boxartimg = customtkinter.CTkImage(light_image=Image.open(f"{CACHE_DIR}/{game_id}/box_art_image.jpg"),size=(133, 200))
                 app.boxart_label.configure(image=boxartimg)
                 bgimage = customtkinter.CTkImage(light_image=Image.open(add_gradient(username, keyring.get_password("GameVault-Snake", username), game_id)),size=(1920, 1080))
-                # bgimage = customtkinter.CTkImage(light_image=Image.open(f"{CACHE_DIR}/{game_id}/{game_id}_with_gradient.png"),size=(1920, 1080))
-                app.bg_label.configure(image=bgimage)
+                # app.bg_label.configure(image=bgimage)
                 self.begin_label.pack_forget()
                 app.title_label.configure(text=title)
                 app.year_label.configure(text=f"GAME RELEASE: {release_date}")
                 app.version_label.configure(text=f"GAME Version: {version}")
                 self.description_label.configure(state="normal")
                 app.description_label.insert("0.0",text=description)
-                self.download_button.grid(row=2, column=0, pady=(20, 10), sticky="nsew")
+                def rungame():
+                    exe = self.exe_selector.get()
+                    save_exe_selection(game_id, exe)
+                    subprocess.run(self.exe_selector.get(), shell=True)
+
+                if is_installed(game_id) == True:
+                    self.exe_selector.configure(values=get_exes_paths(game_id))
+                    self.exe_selector.grid(row=2, column=0, pady=(20, 10), sticky="nsew")
+                    if get_exe_selection(game_id) == None:
+                        self.exe_selector.set("Select an executable")
+                    else:
+                        self.exe_selector.set(get_exe_selection(game_id))
+                    self.action_button.configure(text= "Play",command=lambda: rungame())
+                    self.action_button.grid(row=3, column=0, pady=(20, 10), sticky="nsew")
+                elif is_downloaded(game_id) == True:
+                    self.action_button.configure(text="Install",command=lambda: install_game(game_id))
+                    self.action_button.grid(row=2, column=0, pady=(20, 10), sticky="nsew")
+                else:
+                    self.action_button.configure(text="Download",command=lambda: download_game(username, keyring.get_password("GameVault-Snake", username), game_id))
+                    self.action_button.grid(row=2, column=0, pady=(20, 10), sticky="nsew")
+
                 self.boxart_label.grid(row=1, column=0, pady=(20, 10), sticky="nsew")
                 self.title_label.grid(row=0, column=1, pady=(20, 10), sticky="nsew",)
                 self.year_label.grid(row=2, column=1, pady=(20, 10), sticky="nsew")
                 self.version_label.grid(row=3, column=1, pady=(20, 10), sticky="nsew")
-                self.bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)  # Cover the entire frame
+                # self.bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)  # Cover the entire frame
                 
                 self.description_label.grid(row=4, column=0, columnspan=2, pady=(20, 10), sticky="nsew")
                 self.description_label.configure(state="disabled")
@@ -158,7 +178,6 @@ class App(customtkinter.CTk):
         games = fetch_game_titles(username, keyring.get_password("GameVault-Snake", username))
         for game in games:
             fetch_game_info(username, keyring.get_password("GameVault-Snake", username), f"{game['id']}")
-            # add_gradient(username, keyring.get_password("GameVault-Snake", username), f"{game['id']}") #Might break things
             #ADD LOADING SCREEN AND DONT USE MULTITHREADING ON STARTUP
             thread_add_gradient = threading.Thread(target=add_gradient, args=(username, keyring.get_password("GameVault-Snake", username), f"{game['id']}"))
             thread_add_gradient.start()
@@ -173,12 +192,30 @@ class App(customtkinter.CTk):
         self.main_frame.grid_rowconfigure(0, weight=1)
         #Background
         self.bg_label = customtkinter.CTkLabel(self.main_frame, text="")
-
         self.bg_label.lower()  # Lower the background label to the bottom of the stacking order
+        
+        # def change_cursor(event):
+        #     self.options_menu.configure(cursor="hand2")  # Change cursor to hand when hovering over the label
+
+        # def restore_cursor(event):
+        #     self.options_menu.configure(cursor="")  # Restore default cursor when leaving the label
+        # self.options_menu = customtkinter.CTkLabel(self.main_frame, text="⚙️",)
+        # self.options_menu.place(relx=.97, rely=.01)
+        # self.options_menu.bind("<Enter>", change_cursor)
+        # self.options_menu.bind("<Leave>", restore_cursor)
+
+        
+        # self.game_info_window = customtkinter.CTkScrollableFrame(self.main_frame, corner_radius=0, fg_color="blue",)
+        # self.game_info_window.grid(row=0, column=0, sticky="nsew")
+        # self.game_info_window.grid_rowconfigure(0, weight=1)
+        # self.game_info_window.lift()
+        
         self.begin_label = customtkinter.CTkLabel(self.main_frame, text="Select a Game",)
         self.begin_label.pack()
         self.boxart_label = customtkinter.CTkLabel(self.main_frame, text="")
-        self.download_button=customtkinter.CTkButton(self.main_frame,text="Download")
+        self.exe_selector = customtkinter.CTkComboBox(self.main_frame, state="readonly")
+        self.action_button=customtkinter.CTkButton(self.main_frame,text="")
+
         self.title_label = customtkinter.CTkLabel(self.main_frame, text="",anchor="w")
         self.year_label = customtkinter.CTkLabel(self.main_frame, text="",anchor="w")
         self.version_label = customtkinter.CTkLabel(self.main_frame, text="",anchor="w")
@@ -202,6 +239,7 @@ class App(customtkinter.CTk):
             self.download_progress.grid(row=1, column=0, sticky="nsew", padx=5, pady=(0,5))
             self.download_progress.set(0)
         # show_download_progress()
+            
 
 
 
@@ -212,6 +250,12 @@ class App(customtkinter.CTk):
 
 
 
+
+    def open_about(self):
+        if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
+            self.toplevel_window = AboutWindow(self)
+        else:
+            self.toplevel_window.focus() 
 
 
 
@@ -247,6 +291,17 @@ class SettingsWindow(customtkinter.CTkToplevel):
         self.submit_up.pack(padx=20, pady=20)
         self.submit_up = customtkinter.CTkButton(self, text="Clear Cache" ,command=lambda: clear_cache())
         self.submit_up.pack(padx=20, pady=20)
+
+
+class AboutWindow(customtkinter.CTkToplevel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.geometry("400x300")
+        self.Informaiton = customtkinter.CTkTextbox(self, width=400, height=300,wrap="word")
+        self.Informaiton.pack()
+        self.Informaiton.insert("0.0",text="Not Offical and Not for Sale, If you bought this product in this form you were scammed this is licenced under MIT.")
+        self.Informaiton.configure(state="disabled")
+        
 
 
 
