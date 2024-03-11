@@ -164,3 +164,4 @@ test*.py
 cached_games.json
 settings.ini.old
 cache/
+Auto Py to EXE.json

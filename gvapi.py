@@ -6,7 +6,6 @@ import json
 from PIL import Image,ImageDraw
 from io import BytesIO
 from pySmartDL import SmartDL
-import zipfile
 import patoolib
 
 
