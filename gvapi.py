@@ -7,10 +7,17 @@ from PIL import Image,ImageDraw
 from io import BytesIO
 from pySmartDL import SmartDL
 import patoolib
+import threading
 
 
 SETTINGS_FILE = 'settings.ini'
 config = configparser.ConfigParser()
+config.read(SETTINGS_FILE)
+URL = config['SETTINGS'].get('url')
+CACHE_DIR = "cache"                             #This is where we will store the 
+CACHE_FILE = f"{CACHE_DIR}/cached_games.json"   #This is all the games in one file
+os.makedirs(CACHE_DIR, exist_ok=True)           # Create cache directory if it does not exist
+
 # Check if settings file exists, if not, create it with default values
 if not os.path.exists(SETTINGS_FILE):
     # Create ConfigParser instance
@@ -27,15 +34,6 @@ if not os.path.exists(SETTINGS_FILE):
     with open(SETTINGS_FILE, 'w') as configfile:
         config.write(configfile)
 
-
-
-
-
-
-config.read(SETTINGS_FILE)
-URL = config['SETTINGS'].get('url')
-
-
 def check_url_health(passedurl):
     try:
         response = requests.get(f'{passedurl}/api/health')
@@ -48,10 +46,6 @@ def check_url_health(passedurl):
     
     return False
 
-
-
-CACHE_DIR = "cache"                             #This is where we will store the 
-CACHE_FILE = f"{CACHE_DIR}/cached_games.json"   #This is all the games in one file
 
 def fetch_game_titles(username, password):
     # Try to load cached data
@@ -83,14 +77,6 @@ def fetch_game_titles(username, password):
     else:
         print("Failed to fetch game titles. Status code:", response.status_code)
         return None
-
-
-
-# Define the directory for caching
-
-
-# Create cache directory if it does not exist
-os.makedirs(CACHE_DIR, exist_ok=True)
 
 def save_cache(gid, data):
     cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
@@ -235,73 +221,6 @@ def get_image(username, password, gid, boxart=False):
             print("Box art image information not found in game data.")
         return None
 
-
-# # Example usage:
-# image = get_image("user", "pass", 27, boxart=False) #FALSE FOR BG IMAGE
-# print(image)
-
-# Example usage:
-# domain = "http://"
-# is_healthy = check_url_health(f'{domain}/api/health')
-# print(f"The URL is healthy: {is_healthy}")
-
-# Usage
-# username = ''
-# password = ''
-# games = fetch_game_titles(username, password)
-# for game in games:
-#     print(f"Games: {game['title']}")
-
-# Usage
-# username = ''
-# password = ''
-# gid = 1
-# game_infos = fetch_game_info(username, password, 1)
-# if game_infos:
-#     print(game_infos)  # Print the fetched game info ['title']
-# else:
-#     print("Failed to fetch game info.")
-    
-
-
-
-
-# def add_gradient(username, password, gid):
-#     print("ADDING GRADIENT TO BOXART")
-#     # Open the image
-#     image_path = get_image(username, password, gid, boxart=False)
-#     if image_path is None:
-#         print("Failed to fetch the image.")
-#         return None
-
-#     image = Image.open(image_path).convert("RGBA")
-#     width, height = image.size
-    
-#     # Calculate the alpha gradient
-#     start_gradient_y = height // 3  # Start the gradient about one-third down the image
-#     for y in range(height):
-#         if y >= start_gradient_y:
-#             # Calculate the alpha value based on the distance from the start of the gradient
-#             alpha = int(255 * (1 - (y - start_gradient_y) / (height - start_gradient_y)) ** 5)  # Adjust the exponent for a more rapid decrease
-            
-#             # Set a minimum threshold for the alpha value
-#             min_alpha = 10  # Adjust as needed
-#             alpha = max(alpha, min_alpha)  # Ensure the alpha value doesn't fall below the threshold
-#         else:
-#             alpha = 255  # Full opacity for the top portion of the image
-        
-#         for x in range(width):
-#             r, g, b, _ = image.getpixel((x, y))
-#             image.putpixel((x, y), (r, g, b, alpha))
-    
-#     # Save the resulting image
-#     output_folder = os.path.join(CACHE_DIR, str(gid))
-#     os.makedirs(output_folder, exist_ok=True)
-#     output_path = os.path.join(output_folder, f"{gid}_with_gradient.png")
-#     image.save(output_path)
-#     print(f"Gradient added to image: {output_path}")
-#     return output_path
-
 def add_gradient(username, password, gid):
     print("radient function running")
     # Check if the image with gradient already exists in cache
@@ -346,62 +265,29 @@ def add_gradient(username, password, gid):
     return output_path
 
 
-
-
-# # Example usage:
-# image = add_gradient("username", "password", 27) #FALSE FOR BG IMAGE
-# print(image)
-
-
-
-
-
-# def download_game(username, password, gid, folder_path):
+# def download_game(username, password, gid, force_redownload=False):
 #     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
 #     url = f'{URL}/api/games/{gid}/download'
-#     headers = {
-#         'accept': 'application/json',
-#         'Authorization': f'Basic {encoded_credentials}'
-#     }
-#     params = {}
-
-#     try:
-#         response = requests.get(url, params=params, headers=headers)
-#         response.raise_for_status()  # Raises an exception for 4XX or 5XX status codes
-#         file_name = f"game_{gid}.json"  # You can change the filename as needed
-#         file_path = os.path.join(folder_path, file_name)
-#         with open(file_path, 'wb') as file:
-#             file.write(response.content)
-#         print(f"Game downloaded and saved to {file_path}")
-#         return file_path
-#     except requests.exceptions.RequestException as e:
-#         print(f"Error downloading game: {e}")
+#     installfolder = config['SETTINGS'].get('install_location')
+#     path = fetch_game_info(username, password, gid)
+#     destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
+    
+#     # Check if the file already exists and force_redownload is False
+#     if not force_redownload and os.path.exists(destination):
+#         print("Game already downloaded:", destination)
+#         return destination
+    
+#     request_args = {"headers": {"Authorization": f'Basic {encoded_credentials}'}}
+#     downloader = SmartDL(url, destination, request_args=request_args)
+#     # threading.Thread(target=downloader.start, daemon=True).start()
+#     downloader.start()  # Starts the downloading process
+    
+#     if downloader.isSuccessful():
+#         print("Downloaded successfully:", downloader.get_dest())
+#         return downloader.get_dest()
+#     else:
+#         print("Download failed:", downloader.get_errors())
 #         return None
-
-
-
-def download_game(username, password, gid, force_redownload=False):
-    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-    url = f'{URL}/api/games/{gid}/download'
-    installfolder = config['SETTINGS'].get('install_location')
-    path = fetch_game_info(username, password, gid)
-    destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
-    
-    # Check if the file already exists and force_redownload is False
-    if not force_redownload and os.path.exists(destination):
-        print("Game already downloaded:", destination)
-        return destination
-    
-    request_args = {"headers": {"Authorization": f'Basic {encoded_credentials}'}}
-    downloader = SmartDL(url, destination, request_args=request_args)
-    downloader.start()  # Starts the downloading process
-    
-    if downloader.isSuccessful():
-        print("Downloaded successfully:", downloader.get_dest())
-        return downloader.get_dest()
-    else:
-        print("Download failed:", downloader.get_errors())
-        return None
 
 
 def install_game(gid):
@@ -409,12 +295,9 @@ def install_game(gid):
     destination = f"{config['SETTINGS'].get('install_location')}/{gid}/{os.path.splitext(os.path.basename(foldername['file_path']))[0]}"
     gamezip = f"{config['SETTINGS'].get('install_location')}/{gid}/download/{os.path.basename(foldername['file_path'])}"
     patoolib.extract_archive(gamezip , outdir=destination)
-    open(f"{destination}/example.txt", 'w').close()
+    installfolder = config['SETTINGS'].get('install_location')
+    open(f"{installfolder}/{gid}/.installed", 'w').close()
     print("UNZIPPED GAME")
-
-
-
-
 
 
 
@@ -463,11 +346,3 @@ def get_exe_selection(gid):
     with open(destination, 'r') as f:
         return f.read()
     
-
-# print(get_exes(27))
-
-
-
-# path = fetch_game_info(username, password, gid)
-# file_name = os.path.basename(path['file_path'])
-# print(file_name)

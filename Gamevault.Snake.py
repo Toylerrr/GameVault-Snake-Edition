@@ -1,4 +1,4 @@
-import ttkbootstrap as tk
+import tkinter as tk
 from tkinter import filedialog
 import os
 from PIL import Image, ImageDraw
@@ -26,6 +26,7 @@ install_location = config['SETTINGS'].get('install_location')
 url = config['SETTINGS'].get('url')
 
 
+
         
 class App(customtkinter.CTk):
     def __init__(self):
@@ -34,16 +35,43 @@ class App(customtkinter.CTk):
         config = configparser.ConfigParser()
         config.read('settings.ini')
         username = config['SETTINGS']['username']
-        def validate_url():
-            url = config['SETTINGS']['url']
-            if url:
-                is_valid = check_url_health(url)
-                if is_valid:
-                    self.GV_URL.configure(fg_color='green')  # Change text color to green for valid URL
-                else:
-                    self.GV_URL.configure(fg_color='red')    # Change text color to red for invalid URL
-                return is_valid
-            return False
+        #START DOWNLOADER
+        def download_game(username, password, gid, force_redownload=False):
+            encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+            url = f'{URL}/api/games/{gid}/download'
+            installfolder = config['SETTINGS'].get('install_location')
+            path = fetch_game_info(username, password, gid)
+            destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
+            
+            # Check if the file already exists and force_redownload is False
+            if not force_redownload and os.path.exists(destination):
+                print("Game already downloaded:", destination)
+                return destination
+            
+            request_args = {"headers": {"Authorization": f'Basic {encoded_credentials}'}}
+            downloader = SmartDL(url, destination, request_args=request_args)
+            # threading.Thread(target=downloader.start).start()
+            downloader.start(blocking=False)  # Starts the downloading process
+            show_download_progress(path['title'])
+            def update_progress():
+                if downloader.get_status() == "downloading":
+                    progress = downloader.get_progress()
+                    speed = downloader.get_speed(human=True)
+                    self.download_progress.set(progress)
+                    # speed_label.configure(text=f"Speed: {speed}")
+                    self.after(100, update_progress)
+                elif downloader.get_status() == "finished":
+                    self.download_progress.set['value'] = 1
+                    
+                    # speed_label.configure(text="Download completed.")
+            update_progress()
+
+        #END DOWNLOADER
+
+
+        def async_download_game(username, password, game_id):
+            t = threading.Thread(target=download_game, args=(username, password, game_id))
+            t.start()
         
 
         # configure window
@@ -98,6 +126,7 @@ class App(customtkinter.CTk):
         self.sidebar_frame.grid(row=1, column=0, rowspan=3, sticky="nsew")
         self.sidebar_frame.grid_columnconfigure(0, weight=1)
         def selected_game(game_id):
+            app.exe_selector.grid_forget()
             app.title_label.grid_forget()
             app.year_label.grid_forget()
             app.version_label.grid_forget()
@@ -155,7 +184,7 @@ class App(customtkinter.CTk):
                     self.action_button.configure(text="Install",command=lambda: install_game(game_id))
                     self.action_button.grid(row=2, column=0, pady=(20, 10), sticky="nsew")
                 else:
-                    self.action_button.configure(text="Download",command=lambda: download_game(username, keyring.get_password("GameVault-Snake", username), game_id))
+                    self.action_button.configure(text="Download",command=lambda: async_download_game(username, keyring.get_password("GameVault-Snake", username), game_id))
                     self.action_button.grid(row=2, column=0, pady=(20, 10), sticky="nsew")
 
                 self.boxart_label.grid(row=1, column=0, pady=(20, 10), sticky="nsew")
@@ -180,7 +209,7 @@ class App(customtkinter.CTk):
             fetch_game_info(username, keyring.get_password("GameVault-Snake", username), f"{game['id']}")
             #ADD LOADING SCREEN AND DONT USE MULTITHREADING ON STARTUP
             thread_add_gradient = threading.Thread(target=add_gradient, args=(username, keyring.get_password("GameVault-Snake", username), f"{game['id']}"))
-            thread_add_gradient.start()
+            # thread_add_gradient.start()
         sorted_games = sorted(games, key=lambda x: x['title'])
         for game in sorted_games:
             label = customtkinter.CTkButton(self.sidebar_frame, text=f"{game['title']}", corner_radius=0, fg_color="transparent", anchor="w", command=lambda game_id=game['id']: selected_game(game_id),text_color=('black','white'))
@@ -193,23 +222,8 @@ class App(customtkinter.CTk):
         #Background
         self.bg_label = customtkinter.CTkLabel(self.main_frame, text="")
         self.bg_label.lower()  # Lower the background label to the bottom of the stacking order
-        
-        # def change_cursor(event):
-        #     self.options_menu.configure(cursor="hand2")  # Change cursor to hand when hovering over the label
 
-        # def restore_cursor(event):
-        #     self.options_menu.configure(cursor="")  # Restore default cursor when leaving the label
-        # self.options_menu = customtkinter.CTkLabel(self.main_frame, text="⚙️",)
-        # self.options_menu.place(relx=.97, rely=.01)
-        # self.options_menu.bind("<Enter>", change_cursor)
-        # self.options_menu.bind("<Leave>", restore_cursor)
 
-        
-        # self.game_info_window = customtkinter.CTkScrollableFrame(self.main_frame, corner_radius=0, fg_color="blue",)
-        # self.game_info_window.grid(row=0, column=0, sticky="nsew")
-        # self.game_info_window.grid_rowconfigure(0, weight=1)
-        # self.game_info_window.lift()
-        
         self.begin_label = customtkinter.CTkLabel(self.main_frame, text="Select a Game",)
         self.begin_label.pack()
         self.boxart_label = customtkinter.CTkLabel(self.main_frame, text="")
@@ -228,17 +242,16 @@ class App(customtkinter.CTk):
         self.progressbar_1.lift()
         self.progressbar_1.place_forget()
 
-        def show_download_progress():
+        def show_download_progress(gamename):
             self.dl_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent",)
             self.dl_frame.grid(row=3, column=1, sticky="nsew")
             self.dl_frame.grid_rowconfigure(0, weight=1)
             self.dl_frame.grid_columnconfigure(0, weight=1)
-            self.spacingfixer = customtkinter.CTkLabel(self.dl_frame, text="Currently Downloading: GAME NAME")
+            self.spacingfixer = customtkinter.CTkLabel(self.dl_frame, text=f"Currently Downloading: {gamename}")
             self.spacingfixer.grid(row=0, column=0)
             self.download_progress = customtkinter.CTkProgressBar(self.dl_frame)
             self.download_progress.grid(row=1, column=0, sticky="nsew", padx=5, pady=(0,5))
-            self.download_progress.set(0)
-        # show_download_progress()
+        
             
 
 

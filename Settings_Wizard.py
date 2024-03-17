@@ -78,6 +78,9 @@ class InstallWizard(customtkinter.CTk):
         # Submit Button
         self.submit_il = customtkinter.CTkButton(frame, text='Submit', command=self.submit_credentials)
         self.submit_il.grid(row=6, columnspan=2, pady=10)
+
+        self.close_label = customtkinter.CTkLabel(frame, text="")
+        self.close_label.grid(row=7, columnspan=2, pady=10)
     
     def select_install_location(self):
         folder_selected = filedialog.askdirectory()
@@ -99,6 +102,7 @@ class InstallWizard(customtkinter.CTk):
         config.set('SETTINGS', 'url',url)
         with open('settings.ini', 'w') as configfile:
             config.write(configfile)
+        self.close_label.configure(text="Settings saved! Close and reopen to launch GameVault-Snake Edition.")
 
 
 
