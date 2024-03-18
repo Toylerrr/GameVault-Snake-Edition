@@ -31,8 +31,16 @@ GameVault Snake Edition is my open-source Python launcher designed for the GameV
 ## Steamdeck
 The client was made for the steamdeck funny enough it doesnt work on the steamdeck at this time. It can be used on other operating systems but I will not support it. I made this for me and my steamdeck.
 
-## Support
+## Security
+This uses your OS keyring see here: https://github.com/jaraco/keyring
+I did not and do not want to be responsible for your password or information that is why I used keyring to hand off all opsec to your OS. 
 
+##EULA
+I want to make it clear that I am not responsible for any issues, damages, or consequences that may arise from the use of this software. Users are responsible for their own actions and are encouraged to use the project responsibly and in accordance with applicable laws and regulations. By using Gamevault Snake Edition, users agree to waive any liability claims against me and understand that they are using the software at their own risk.
+
+Gamevault Snake Edition is not part of the Phalcode software suite nor is it offically supported software. Use at your own risk.
+
+## Support
 Phalcode is not going to support the project or client via their discord. Do not ask for support in their discord for this client.
 
 ## Dependencies
