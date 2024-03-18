@@ -21,7 +21,7 @@ GameVault Snake Edition is my open-source Python launcher designed for the GameV
 
 
 ## Functionality: To be added
--Image replacement 
+- Image replacement 
 - Multidownload and download managment page
 - Better setting menu
 - Detect Appdata folder on multi OS (instead of all settings and cache living next to the main file)
