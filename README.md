@@ -1,5 +1,13 @@
 # GameVault Snake Edition
- 
+
+If you like GameVault, consider donating to support the developers. They work hard and are far better at what they do than I am.
+
+### Direct links to Phalcodes donations:
+- GitHub Sponsors: [Phalcode](https://github.com/sponsors/Phalcode)
+- Ko-fi: [Phalcode](https://ko-fi.com/phalcode)
+- Liberapay: [Phalcode](https://liberapay.com/phalcode)
+- GV+: Coming soon https://gamevau.lt/blog/2024/03/28/
+
 
 ## Overview
 GameVault Snake Edition is my open-source Python launcher designed for the GameVault self-hosted server. It's my first significant coding project, still a work in progress. This will require major refactoring to get to a good "acceptable" point. 
@@ -34,6 +42,8 @@ The client was made for the steamdeck funny enough it doesnt work on the steamde
 ## Security
 This uses your OS keyring see here: https://github.com/jaraco/keyring
 I did not and do not want to be responsible for your password or information that is why I used keyring to hand off all opsec to your OS. 
+
+Remember don't run strange code from some guy on your devices ALWAYS look at the source code. - Some Guy
 
 ## EULA
 I want to make it clear that I am not responsible for any issues, damages, or consequences that may arise from the use of this software. Users are responsible for their own actions and are encouraged to use the project responsibly and in accordance with applicable laws and regulations. By using Gamevault Snake Edition, users agree to waive any liability claims against me and understand that they are using the software at their own risk.
