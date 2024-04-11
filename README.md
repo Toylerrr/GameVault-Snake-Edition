@@ -22,7 +22,7 @@ GameVault Snake Edition is my open-source Python launcher designed for the GameV
 - **Download:** Current single download is working.
 
 ## Things that dont work
-- **Server Managment:** You still must have a windows computer to manage the server
+- **Server Management:** You still must have a windows computer to manage the server
 - **Game Remapping:** This client cant remap games to RAWG ids
 - **User Page:** This client doesnt have any user page with whats being played
 - **Playtime counter:** It doesnt track playtime as I didnt want to figure out a way to have it track time
