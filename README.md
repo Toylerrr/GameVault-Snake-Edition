@@ -9,6 +9,9 @@ If you like GameVault, consider donating to support the developers. They work ha
 - GV+: Coming soon https://gamevau.lt/blog/2024/03/28/
 
 
+![image](https://github.com/Toylerrr/GameVault-Snake-Edition/assets/4400902/a63a0cc6-fd5a-4e1a-bd59-6dc6c4cb6866)
+
+
 ## Overview
 GameVault Snake Edition is my open-source Python launcher designed for the GameVault self-hosted server. It's my first significant coding project, still a work in progress. This will require major refactoring to get to a good "acceptable" point. 
 
