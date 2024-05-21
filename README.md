@@ -21,7 +21,7 @@ GameVault Snake Edition is my open-source Python launcher designed for the GameV
 - **Settings Window:** Allows users to input and save their credentials securely.
 - **Configuration Management:** Utilizes a settings file (`settings.ini`) to store and manage user preferences, including username, installation location, and URL.
 - **Dynamic Content:** Retrieves game titles and information dynamically from the Gamevault server then caches it. 
-- **Appearance Customization:** Supports customization of color themes and appearance modes.
+- **Appearance Customization:** Supports customization of color themes and appearance modes. Create your own: https://github.com/Akascape/CTkThemeMaker
 - **Download:** Current single download is working.
 
 ## Things that dont work
