@@ -3,6 +3,7 @@ from platformdirs import *
 import os
 import configparser
 from .util import *
+from .tabview import MyTabView
 import keyring
 
 
@@ -25,8 +26,9 @@ url = config['SETTINGS'].get('url')
 
 
 class Sidebar(customtkinter.CTkFrame):
-    def __init__(self, master, **kwargs):
+    def __init__(self, master, callback, **kwargs):
         super().__init__(master, **kwargs)
+        self.callback = callback
         self.logo_frame = customtkinter.CTkFrame(self, corner_radius=0)
         self.logo_frame.grid(row=0, column=0, sticky="nsew",)
         # self.logo_frame.grid_columnconfigure(0, weight=0)
@@ -51,5 +53,14 @@ class Sidebar(customtkinter.CTkFrame):
             fetch_game_info(username, keyring.get_password("GameVault-Snake", username), f"{game['id']}")
         sorted_games = sorted(games, key=lambda x: x[f'title'])
         for game in sorted_games:
-            label = customtkinter.CTkButton(self.sidebar_frame, text=f"{game['title']}", corner_radius=0, fg_color="transparent", anchor="w")
+            label = customtkinter.CTkButton(self.sidebar_frame, text=f"{game['title']}", corner_radius=0, fg_color="transparent", anchor="w", command=lambda id=game['id']: select_game(id))
             label.grid(row=sorted_games.index(game)+1, column=0, padx=0, pady=0, sticky="ew")
+            # if online_status == True:
+            #     print("OFFLINE OFFLINE")
+            #     if load_cache(game['id']) == None:
+            #             label.configure(text_color="blue", command=lambda: print("offline cant fetch"))
+
+        def select_game(game_id):
+            # Call the callback function with the selected game_id
+                if callback:
+                    callback(game_id)

@@ -15,6 +15,7 @@ from CTkMenuBar import *
 from bin.tabview import MyTabView
 from bin.sidebar import Sidebar
 from bin.menubar import MenuBar
+import dateparser
 
 
 
@@ -63,10 +64,11 @@ url = config['SETTINGS'].get('url')
 
 
 
-
 # Set appearance mode and default color theme
 customtkinter.set_appearance_mode(config['SETTINGS'].get('apperance'))  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme(config['SETTINGS'].get('theme'))  # Themes: "blue" (standard), "green", "dark-blue"
+
+
 
 class App(customtkinter.CTk):
     def __init__(self):
@@ -77,12 +79,14 @@ class App(customtkinter.CTk):
         os_type = platform.system()
         logging.debug(os_type)
         # configure window
-        self.title("GameVaut: Snake Edition")
+        self.title(f"GameVaut: Snake Edition - Online: {online_status}")
         self.geometry("1200x600")
+        self.minsize(1200,600)
         # Configure Grid
         self.grid_columnconfigure(1,weight=1)
         self.grid_rowconfigure(1, weight=1)
 
+        #Stuff wasnt working so this code now lives here till fixed
         self.menu = CTkMenuBar(self)
         self.menu.grid(row=0, column=0, sticky="new",columnspan=2)
         button_1 = self.menu.add_cascade("View")
@@ -99,17 +103,27 @@ class App(customtkinter.CTk):
         dropdown3 = CustomDropdownMenu(widget=button_3)
         dropdown3.add_option(option="Credits", command=lambda: print("open about here"))
 
+        def sidebar_callback(gid):
+            #Select Game
+            game_info=fetch_game_info(username, keyring.get_password("GameVault-Snake", username), gid)
+            self.tab_view.prelabel.destroy()
+            self.tab_view.game_window_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
+            self.tab_view.game_name.configure(text=game_info["rawg_title"])
+            self.tab_view.description.insert("0.0",game_info["description"])
+            self.tab_view.release_year.configure(text=f"Release Year: {dateparser.parse(game_info["release_date"]).strftime("%Y")}")
+            self.tab_view.rating.configure(text=f"Rating: {game_info["metacritic_rating"]}")
+            img_path = get_image(username, keyring.get_password("GameVault-Snake", username), gid, boxart=True)
+            self.tab_view.game_image.configure(light_image=Image.open(img_path))
 
         # self.menu = MenuBar(master=self)
         # self.menu.grid(row=0, column=0, sticky="nsew", columnspan=2)
-        self.sidebar = Sidebar(master=self,fg_color="blue")
+        self.sidebar = Sidebar(master=self,fg_color="blue", callback=sidebar_callback)
         self.sidebar.grid(row=1, column=0, sticky="nsew")
         self.sidebar.rowconfigure(1, weight=1)
         self.tab_view = MyTabView(master=self,anchor="s", fg_color="transparent")
         self.tab_view.grid(row=1, column=1, sticky="nsew")
         self.tab_view.rowconfigure(0, weight=1)
-
 
     
     def change_appearance_mode_event(self, new_appearance_mode: str):

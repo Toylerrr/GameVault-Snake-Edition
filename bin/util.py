@@ -12,6 +12,7 @@ from platformdirs import *
 import logging
 import platform
 import shutil
+import keyring
 
 
 
@@ -55,55 +56,37 @@ if config['SETTINGS'].get('debug') == 'True':
 # Get values from config
 username = config['SETTINGS'].get('username')
 install_location = config['SETTINGS'].get('install_location')
-# url = config['SETTINGS'].get('url')
+url = config['SETTINGS'].get('url')
 # logging.debug(url)
+
+
 
 CACHE_DIR = f"{settings_location}/cache"                             #This is where we will store the 
 CACHE_FILE = f"{CACHE_DIR}/cached_games.json"               #This is all the games in one file
 os.makedirs(settings_location, exist_ok=True) 
 
 
+
+
 #___________END NEW CODE___________
 
-
-
-
-
-#THIS ALL NEEDS TO BE REWRITTEN WITH A CONFIG FILE STUFF FROM MAIN.PY
-
-# SETTINGS_FILE = 'settings.ini'
-# config = configparser.ConfigParser()
-# config.read(SETTINGS_FILE)
-# URL = config['SETTINGS'].get('url')
-# CACHE_DIR = "cache"                             #This is where we will store the 
-# CACHE_FILE = f"{CACHE_DIR}/cached_games.json"   #This is all the games in one file
-# os.makedirs(CACHE_DIR, exist_ok=True)           # Create cache directory if it does not exist
-
-# # Check if settings file exists, if not, create it with default values
-# if not os.path.exists(SETTINGS_FILE):
-#     # Create ConfigParser instance
-#     config = configparser.ConfigParser()
-
-#     # Set default values
-#     config['SETTINGS'] = {
-#         'username': '',
-#         'install_location': '',
-#         'url': ''
-#     }
-
-#     # Write the default configuration to the file
-#     with open(SETTINGS_FILE, 'w') as configfile:
-#         config.write(configfile)
-
-
-
-#END INITAL CONFIG OF SETTINGS
-
+def is_online():
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            logging.debug("ONLINE")
+            return True
+    except Exception:
+        logging.debug("OFFLINE")
+        return False
+    
+online_status = is_online()
 
 def check_url_health(passedurl):
     try:
         response = requests.get(f'{passedurl}/api/health')
         if response.status_code == 200:
+            logging.debug("CODE 200 on url health check")
             json_data = response.json()
             if "status" in json_data and json_data["status"] == "HEALTHY":
                 return True
@@ -111,8 +94,6 @@ def check_url_health(passedurl):
         logging.debug(f"An error occurred: {e}")
     
     return False
-
-
 
 def save_cache(gid, data):
     cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
@@ -175,147 +156,6 @@ def fetch_game_info(username, password, gid):
     else:
         logging.debug("Failed to fetch game info. Status code:", response.status_code)
         return None
-
-#this function is so scuffed
-# def get_image(username, password, gid, boxart=False):
-#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-
-#     cache_folder = os.path.join(CACHE_DIR, str(gid))
-#     os.makedirs(cache_folder, exist_ok=True)
-
-#     if boxart:
-#         cache_path = os.path.join(cache_folder, 'box_art_image.jpg')
-#         if os.path.exists(cache_path):
-#             # If box art image is cached, return the file path
-#             return cache_path
-
-#         # Fetch game information to get box art image URL
-#         game_info = fetch_game_info(username, password, gid)
-#         if game_info and 'box_image' in game_info and game_info['box_image'] is not None:
-#             box_image_url = game_info['box_image'].get('source')
-#             if box_image_url:
-#                 try:
-#                     response = requests.get(box_image_url)
-#                     if response.status_code == 200:
-#                         image_bytes = BytesIO(response.content)
-#                         image = Image.open(image_bytes)
-
-#                         # Convert image to RGB mode
-#                         if image.mode == 'RGBA':
-#                             image = image.convert('RGB')
-
-#                         # Cache the image
-#                         image.save(cache_path)
-#                         print(cache_path)
-#                         return cache_path
-#                     else:
-#                         print(f"Failed to retrieve box art image. Status code: {response.status_code}")
-#                 except Exception as e:
-#                     print(f"An error occurred while fetching box art image: {e}")
-#             else:
-#                 print("Box art image URL not found in game information.")
-#         else:
-#             print("Box art image information not found in game data.")
-#             return "img\\not_found.jpg"
-#         return None
-#     else:
-#         cache_path = os.path.join(cache_folder, 'BG_image.jpg')
-#         if os.path.exists(cache_path):
-#             # If box art image is cached, return the file path
-#             print(f"{cache_path}fetching from cache")
-#             return cache_path
-
-#         # Fetch game information to get box art image URL
-#         game_info = fetch_game_info(username, password, gid)
-#         if game_info and 'background_image' in game_info:
-#             box_image_url = game_info['background_image'].get('source')
-#             if box_image_url:
-#                 try:
-#                     response = requests.get(box_image_url)
-#                     if response.status_code == 200:
-#                         image_bytes = BytesIO(response.content)
-#                         image = Image.open(image_bytes)
-
-#                         # Convert image to RGB mode
-#                         if image.mode == 'RGBA':
-#                             image = image.convert('RGB')
-
-#                         # Cache the image
-#                         image.save(cache_path)
-
-#                         return cache_path
-#                     else:
-#                         print(f"Failed to retrieve box art image. Status code: {response.status_code}")
-#                 except Exception as e:
-#                     print(f"An error occurred while fetching box art image: {e}")
-#             else:
-#                 print("Box art image URL not found in game information.")
-#         else:
-#             print("Box art image information not found in game data.")
-#         return None
-
-
-def get_image(username, password, gid, boxart=False):
-    def fetch_image(url, cache_path):
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                image_bytes = BytesIO(response.content)
-                image = Image.open(image_bytes)
-                if image.mode == 'RGBA':
-                    image = image.convert('RGB')
-                image.save(cache_path)
-                return cache_path
-            else:
-                logging.debug(f"Failed to retrieve image. Status code: {response.status_code}")
-        except Exception as e:
-            logging.debug(f"An error occurred while fetching image: {e}")
-        return None
-
-    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-    cache_folder = os.path.join(CACHE_DIR, str(gid))
-    os.makedirs(cache_folder, exist_ok=True)
-
-    image_type = 'box_art_image' if boxart else 'background_image'
-    cache_filename = 'box_art_image.jpg' if boxart else 'BG_image.jpg'
-    cache_path = os.path.join(cache_folder, cache_filename)
-
-    if os.path.exists(cache_path):
-        logging.debug(f"{cache_path} fetched from cache")
-        return cache_path
-
-    game_info = fetch_game_info(username, password, gid)
-    if game_info and image_type in game_info:
-        image_url = game_info[image_type].get('source')
-        if image_url:
-            result = fetch_image(image_url, cache_path)
-            if result is not None:
-                return result
-        else:
-            logging.debug(f"{image_type.capitalize()} URL not found in game information.")
-    else:
-        logging.debug(f"{image_type.capitalize()} information not found in game data.")
-    logging.debug("Image cant be found returning default image")
-    return "img\\not_found.jpg"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def add_gradient(username, password, gid):
@@ -487,35 +327,214 @@ def get_disk_total(path):
     total_gb = usage.total / (1024 * 1024 * 1024)
     return total_gb
 
-def fetch_game_titles(username, password):
-    # Try to load cached data
+# def fetch_game_titles(username, password):
+#     # Try to load cached data
+#     cached_data = {}
+#     if os.path.exists(CACHE_FILE):
+#         with open(CACHE_FILE, "r") as file:
+#             cached_data = json.load(file)
+#         logging.debug("Using cached game titles.")
+
+#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+#     headers = {
+#         'accept': 'application/json',
+#         'Authorization': f'Basic {encoded_credentials}'
+#     }
+#     params = {'sortBy': 'title:ASC'}
+
+#     response = requests.get(f'{config["SETTINGS"].get("url")}/api/games', params=params, headers=headers)
+
+#     if response.status_code == 200:
+#         data = response.json()
+#         games = data['data']
+        
+#         # Check if there's a difference between current and cached data
+#         if games != cached_data:
+#             # Update the cached data
+#             with open(CACHE_FILE, "w") as file:
+#                 json.dump(games, file)
+#             logging.debug("Cached game titles updated.")
+
+#         return games
+#     else:
+#         logging.debug("Failed to fetch game titles. Status code:", response.status_code)
+#         return None
+    
+def get_image(username, password, gid, boxart=False):
+
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+    cache_folder = os.path.join(CACHE_DIR, str(gid))
+    os.makedirs(cache_folder, exist_ok=True)
+
+    if boxart:
+        cache_path = os.path.join(cache_folder, 'box_art_image.jpg')
+        if os.path.exists(cache_path):
+            # If box art image is cached, return the file path
+            return cache_path
+
+        # Fetch game information to get box art image URL
+        game_info = fetch_game_info(username, password, gid)
+        box_image_id = game_info['box_image'].get('id')
+
+        headers = {
+            'accept': 'application/json',
+            'Authorization': f'Basic {encoded_credentials}'
+        }
+        params = {}
+
+        response = requests.get(config['SETTINGS'].get('url') + f'/api/images/{box_image_id}',params=params, headers=headers)
+        if response.status_code == 200:
+            image_bytes = BytesIO(response.content)
+            image = Image.open(image_bytes)
+
+            # Convert image to RGB mode
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
+
+            # Cache the image
+            image.save(cache_path)
+            print(cache_path)
+            return cache_path
+        else:
+            print(f"Failed to retrieve box art image. Status code: {response.status_code}")
+            return "bin\\img\\not_found.jpg"
+        
+
+        
+
+    else:
+        cache_path = os.path.join(cache_folder, 'BG_image.jpg')
+        if os.path.exists(cache_path):
+            # If box art image is cached, return the file path
+            print(f"{cache_path}fetching from cache")
+            return cache_path
+
+        # Fetch game information to get box art image URL
+        game_info = fetch_game_info(username, password, gid)
+        if game_info and 'background_image' in game_info:
+            box_image_url = game_info['background_image'].get('source')
+            if box_image_url:
+                try:
+                    response = requests.get(box_image_url)
+                    if response.status_code == 200:
+                        image_bytes = BytesIO(response.content)
+                        image = Image.open(image_bytes)
+
+                        # Convert image to RGB mode
+                        if image.mode == 'RGBA':
+                            image = image.convert('RGB')
+
+                        # Cache the image
+                        image.save(cache_path)
+
+                        return cache_path
+                    else:
+                        print(f"Failed to retrieve box art image. Status code: {response.status_code}")
+                except Exception as e:
+                    print(f"An error occurred while fetching box art image: {e}")
+            else:
+                print("Box art image URL not found in game information.")
+        else:
+            print("Box art image information not found in game data.")
+        return None
+
+#UPDATED FUNCTIONS
+# def fetch_game_titles(username, password, online_status=True):
+#     cached_data = {}
+#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+#     if os.path.exists(CACHE_FILE):
+#         with open(CACHE_FILE, "r") as file:
+#             cached_data = json.load(file)
+#         logging.debug("Using cached game titles.")
+
+#     if not online_status:
+#         logging.debug("GV Client Offline. Using cached game titles.")
+#         return cached_data
+
+#     # API Call
+#     headers = {'accept': 'application/json', 'Authorization': f'Basic {encoded_credentials}'}
+#     params = {'sortBy': 'title:ASC'}
+#     response = requests.get(config["SETTINGS"].get("url") + "/api/games", params=params, headers=headers)
+
+#     if response.status_code == 200:
+#         data = response.json().get('data', [])
+
+#         if data != cached_data:
+#             with open(CACHE_FILE, "w") as file:
+#                 json.dump(data, file)
+#             logging.debug("Cached game titles updated.")
+
+#         return data
+#     else:
+#         logging.error(f"Failed to fetch game titles. Status code: {response.status_code}")
+#         return []
+
+# def fetch_game_info(username, password, gid):
+#     # Check if the response is already in the cache
+#     cached_data = load_cache(gid)
+
+
+#     if online_status == False:
+#         logging.debug("GV Client Offline. Using cached game titles.")
+#         return cached_data
+#     elif online_status == True:
+#         encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+#         url = f'{config['SETTINGS'].get('url')}/api/games/{gid}'
+#         headers = {
+#             'accept': 'application/json',
+#             'Authorization': f'Basic {encoded_credentials}'
+#         }
+#         params = {}
+
+#         response = requests.get(url, params=params, headers=headers)
+#         if response.status_code == 200:
+#             data = response.json()
+#             # Cache the response
+#             if data != cached_data:
+#                 save_cache(gid, data)
+#                 logging.debug(f"Cached game data for {gid} updated.")
+#             return data
+#         else:
+#             logging.debug("Failed to fetch game info. Status code:", response.status_code)
+#             return cached_data
+
+
+
+
+# # test_fetch = fetch_game_info(username, keyring.get_password("GameVault-Snake", username),1)
+# fetch_game_info(username, keyring.get_password("GameVault-Snake", username),1)
+
+# # print(test_fetch)
+
+
+
+def fetch_game_titles(username, password, online_status=True):
     cached_data = {}
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as file:
             cached_data = json.load(file)
-        logging.debug("Using cached game titles.")
+        logging.debug("GV Client Online.Using cached game titles.")
 
-    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-    headers = {
-        'accept': 'application/json',
-        'Authorization': f'Basic {encoded_credentials}'
-    }
+    if not online_status:
+        logging.debug("GV Client Offline. Using cached game titles.")
+        return cached_data
+
+    # API Call
+    headers = {'accept': 'application/json', 'Authorization': f'Basic {encoded_credentials}'}
     params = {'sortBy': 'title:ASC'}
-
-    response = requests.get(f'{config["SETTINGS"].get("url")}/api/games', params=params, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
-        games = data['data']
-        
-        # Check if there's a difference between current and cached data
-        if games != cached_data:
-            # Update the cached data
+    try:
+        response = requests.get(config["SETTINGS"].get("url") + "/api/games", params=params, headers=headers)
+        response.raise_for_status()  # Raise an exception for non-200 status codes
+        data = response.json().get('data', [])
+        if data != cached_data:
             with open(CACHE_FILE, "w") as file:
-                json.dump(games, file)
+                json.dump(data, file)
             logging.debug("Cached game titles updated.")
-
-        return games
-    else:
-        logging.debug("Failed to fetch game titles. Status code:", response.status_code)
-        return None
+        return data
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch game titles: {e}")
+        return cached_data
