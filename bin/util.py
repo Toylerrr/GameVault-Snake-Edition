@@ -13,15 +13,26 @@ import logging
 import platform
 import shutil
 import keyring
+import sqlite3
+import subprocess
+import py7zr
+import zipfile
+import notifypy
+from notifypy import Notify
+import functools
+notifypy.Notify._selected_notification_system = functools.partial(notifypy.Notify._selected_notification_system, override_windows_version_detection=True)
 
 
 
-#___________NEW CODE___________
+
+#___________Main Settings___________
 appname = 'GameVault-Snake Edition'
 appauthor = 'Toylerrr'
 settings_file_name = 'settings.ini'
 settings_location = user_data_dir(appname, appauthor)
 settings_file = os.path.join(settings_location, settings_file_name)
+
+
 
 
 # Ensure settings directory exists
@@ -65,10 +76,9 @@ CACHE_DIR = f"{settings_location}/cache"                             #This is wh
 CACHE_FILE = f"{CACHE_DIR}/cached_games.json"               #This is all the games in one file
 os.makedirs(settings_location, exist_ok=True) 
 
-
-
-
-#___________END NEW CODE___________
+# Define the path for the SQLite database file
+DB_PATH = os.path.join(CACHE_DIR, "cache.db")
+#___________END Main Settings___________
 
 def is_online():
     try:
@@ -95,42 +105,47 @@ def check_url_health(passedurl):
     
     return False
 
+# Function to initialize the database and create the cache table if it doesn't exist
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cache (
+                gid TEXT PRIMARY KEY,
+                data TEXT
+            )
+        ''')
+        conn.commit()
+
+# Function to save cache data to the SQLite database
 def save_cache(gid, data):
-    cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
-    with open(cache_file, "w") as file:
-        json.dump(data, file)
+    init_db()  # Ensure the database is initialized
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO cache (gid, data) VALUES (?, ?)
+        ''', (gid, json.dumps(data)))
+        conn.commit()
 
+# Function to load cache data from the SQLite database
 def load_cache(gid):
-    cache_file = os.path.join(CACHE_DIR, f"{gid}.json")
-    if os.path.exists(cache_file):
-        with open(cache_file, "r") as file:
-            return json.load(file)
-    return None
+    init_db()  # Ensure the database is initialized
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT data FROM cache WHERE gid = ?', (gid,))
+        result = cursor.fetchone()
+        if result:
+            return json.loads(result[0])
+        return None
 
+# Function to clear the cache from the SQLite database
 def clear_cache():
-    # Check if the cache directory exists
-    if os.path.exists(CACHE_DIR):
-        # Iterate over all files and subdirectories in the cache directory
-        for root, dirs, files in os.walk(CACHE_DIR, topdown=False):
-            # Remove all files in the current directory
-            for filename in files:
-                file_path = os.path.join(root, filename)
-                try:
-                    os.remove(file_path)
-                except Exception as e:
-                    logging.debug(f"Failed to remove {file_path}: {e}")
-            # Remove the current subdirectory itself
-            for dirname in dirs:
-                dir_path = os.path.join(root, dirname)
-                try:
-                    os.rmdir(dir_path)
-                except Exception as e:
-                    logging.debug(f"Failed to remove {dir_path}: {e}")
-        # Print a message indicating that the cache was cleared successfully
-        logging.debug("Cache cleared successfully.")
-    else:
-        # Print a message if the cache directory does not exist
-        logging.debug("Cache directory does not exist. Nothing to clear.")
+    init_db()  # Ensure the database is initialized
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM cache')
+        conn.commit()
+    logging.debug("Cache cleared successfully.")
 
 def fetch_game_info(username, password, gid):
     # Check if the response is already in the cache
@@ -157,95 +172,55 @@ def fetch_game_info(username, password, gid):
         logging.debug("Failed to fetch game info. Status code:", response.status_code)
         return None
 
-
-def add_gradient(username, password, gid):
-    logging.debug("radient function running")
-    # Check if the image with gradient already exists in cache
-    output_folder = os.path.join(CACHE_DIR, str(gid))
-    output_path = os.path.join(output_folder, f"{gid}_with_gradient.png")
+def unzip_game(gid):
+    foldername = fetch_game_info("NULL", "NULL", gid)  # Assuming this fetches the game info
+    game_name = foldername['title']
+    logging.debug(f"Game name: {game_name}")
     
-    if os.path.exists(output_path):
-        logging.debug("Gradient already added to image. Returning cached version.")
-        return output_path
+    install_location = config['SETTINGS'].get('install_location')
+    destination = os.path.join(install_location, f"Installations/({gid}){game_name}/Files")
+    logging.debug(f"Destination: {destination}")
     
-    # Open the original image
-    logging.debug("Gradient function: Opening image...")
-    image_path = get_image(username, password, gid, boxart=False)
-    if image_path is None:
-        logging.debug("Failed to fetch the image.")
-        return None
-
-    image = Image.open(image_path).convert("RGBA")
-    width, height = image.size
+    # Create the destination directory if it doesn't exist
+    os.makedirs(destination, exist_ok=True)
+    logging.debug(f"Created destination directory: {destination}")
     
-    # Calculate the alpha gradient
-    start_gradient_y = height // 3  # Start the gradient about one-third down the image
-    for y in range(height):
-        if y >= start_gradient_y:
-            # Calculate the alpha value based on the distance from the start of the gradient
-            alpha = int(255 * (1 - (y - start_gradient_y) / (height - start_gradient_y)) ** 5)  # Adjust the exponent for a more rapid decrease
-            
-            # Set a minimum threshold for the alpha value
-            min_alpha = 10  # Adjust as needed
-            alpha = max(alpha, min_alpha)  # Ensure the alpha value doesn't fall below the threshold
-        else:
-            alpha = 255  # Full opacity for the top portion of the image
-        
-        for x in range(width):
-            r, g, b, _ = image.getpixel((x, y))
-            image.putpixel((x, y), (r, g, b, alpha))
+    downloaded_file = is_downloaded(gid, file_path=True)
+    downloaded_file = os.path.normpath(downloaded_file)  # Sanitize the file path using normpath
+    logging.debug(f"Downloaded file: {downloaded_file}")
     
-    # Save the resulting image
-    os.makedirs(output_folder, exist_ok=True)
-    image.save(output_path)
-    logging.debug(f"Gradient added to cache: {output_path}")
-    return output_path
-
-
-# def download_game(username, password, gid, force_redownload=False):
-#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-#     url = f'{URL}/api/games/{gid}/download'
-#     installfolder = config['SETTINGS'].get('install_location')
-#     path = fetch_game_info(username, password, gid)
-#     destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
+    if os.path.isfile(downloaded_file) and zipfile.is_zipfile(downloaded_file):
+        try:
+            with zipfile.ZipFile(downloaded_file, 'r') as zip_ref:
+                zip_ref.extractall(destination)
+            logging.debug("UNZIPPED GAME")
+        except Exception as e:
+            logging.error(f"Error extracting {downloaded_file}: {e}")
+            # Cleanup if extraction fails
+            logging.debug(f"Cleaning up {destination}")
+            if os.path.exists(destination):
+                shutil.rmtree(destination)
+                logging.debug(f"Cleanup successful: {destination}")
+            else:
+                logging.debug(f"Directory does not exist: {destination}")
+    else:
+        logging.error("Downloaded file not found, path incorrect, or not a valid ZIP file.")
     
-#     # Check if the file already exists and force_redownload is False
-#     if not force_redownload and os.path.exists(destination):
-#         print("Game already downloaded:", destination)
-#         return destination
-    
-#     request_args = {"headers": {"Authorization": f'Basic {encoded_credentials}'}}
-#     downloader = SmartDL(url, destination, request_args=request_args)
-#     # threading.Thread(target=downloader.start, daemon=True).start()
-#     downloader.start()  # Starts the downloading process
-    
-#     if downloader.isSuccessful():
-#         print("Downloaded successfully:", downloader.get_dest())
-#         return downloader.get_dest()
-#     else:
-#         print("Download failed:", downloader.get_errors())
-#         return None
 
-
-def install_game(gid):
-    foldername = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
-    destination = f"{config['SETTINGS'].get('install_location')}/{gid}/{os.path.splitext(os.path.basename(foldername['file_path']))[0]}"
-    gamezip = f"{config['SETTINGS'].get('install_location')}/{gid}/download/{os.path.basename(foldername['file_path'])}"
-    patoolib.extract_archive(gamezip , outdir=destination)
-    installfolder = config['SETTINGS'].get('install_location')
-    open(f"{installfolder}/{gid}/.installed", 'w').close()
-    logging.debug("UNZIPPED GAME")
-
-def is_downloaded(gid):
+def is_downloaded(gid, file_path=False):
     installfolder = config['SETTINGS'].get('install_location')
     path = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
-    destination = f"{installfolder}/{gid}/download/{os.path.basename(path['file_path'])}"
+    game_name = path['title']
+    destination = f"{installfolder}/Downloads/({gid}){game_name}/{os.path.basename(path['file_path'])}"
+    if file_path:
+        return destination
     return os.path.exists(destination)
 
 def is_installed(gid):
     installfolder = config['SETTINGS'].get('install_location')
-    path = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
-    destination = f"{installfolder}/{gid}/.installed"
+    game_data = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
+    game_name = game_data['title']
+    destination = f"{installfolder}/Installations/({gid}){game_name}"
     logging.debug(f"Checking if {destination} exists...")
     return os.path.exists(destination)
 
@@ -258,15 +233,45 @@ def get_exes_paths(gid):
             if filename.endswith(".exe"):
                 exes.append(os.path.join(root, filename))
     return exes
+
 def get_exes(gid):
-    foldername = fetch_game_info("NULL","NULL",gid) #User and pass not needed as it should already be in cache
-    destination = f"{config['SETTINGS'].get('install_location')}/{gid}/{os.path.splitext(os.path.basename(foldername['file_path']))[0]}"
+    foldername = fetch_game_info("NULL", "NULL", gid)  # Assuming fetch_game_info exists and returns a dictionary
+    game_name = foldername['title']
+    installfolder = config['SETTINGS'].get('install_location')
+    destination = f"{installfolder}/Installations/({gid}){game_name}/"
+
+    # List of executable names to ignore (with .exe appended)
+    ignore_base_names = [
+        "arc", "autorun", "bssndrpt", "crashpad_handler", "crashreportclient", 
+        "crashreportserver", "dxdiag", "dxsetup", "dxwebsetup", "dxwebsetupinstaller", 
+        "installationkit", "installationmanager", "installationscript", "installationwizard", 
+        "installer", "installerassistant", "installersetup", "installerupdater", "installfile", 
+        "installscript", "installwizard", "notification_helper", "oalinst", "patcher", 
+        "patchinstaller", "patchmanager", "patchscript", "patchsetup", "patchupdater", 
+        "python", "pythonw", "quicksfv", "quickuninstall", "sendrpt", "setup", 
+        "setupassistant", "setupconfig", "setupfile", "setupinstaller", "setupkit", 
+        "setupmanager", "setupscript", "setuputility", "setupwizard", "skidrow", 
+        "smartsteaminstaller", "smartsteamloader_x32", "smartsteamloader_x64", 
+        "smartsteamuninstaller", "ubisoftgamelauncherinstaller", "ue4prereqsetup_x64", 
+        "unarc", "unins000", "unins001","unins002", "uninst", "uninstall", "uninstallagent", 
+        "uninstallapplication", "uninstalldriver", "uninstaller", "uninstallerassistant", 
+        "uninstallhandler", "uninstallhelper", "uninstallmanager", "uninstallprogram", 
+        "uninstallscript", "uninstallservice", "uninstalltool", "uninstalltoolkit", 
+        "uninstallupdater", "uninstallutility", "uninstallwizard", "unitycrashhandler", 
+        "unitycrashhandler32", "unitycrashhandler64", "unrealcefsubprocess", "vc_redist.x64", 
+        "vc_redist.x86", "vcredist_x64", "vcredist_x642", "vcredist_x643", "vcredist_x86", 
+        "vcredist_x862", "vcredist_x863", "vcredist_x86_2008", "verify", "VC_redist.x86",
+        "VC_redist.x64","DXSETUP","gfwlivesetup","GfWLPKSetter"
+    ]
+    ignore_list = {f"{name}.exe" for name in ignore_base_names}
+
     exes = []
     for root, dirs, files in os.walk(destination):
         for filename in files:
-            if filename.endswith(".exe"):
-                exes.append(filename)
+            if filename.endswith(".exe") and filename not in ignore_list:
+                exes.append(os.path.join(root, filename))  # Include full path to the exe file
     return exes
+
 
 def save_exe_selection(gid, exe):
     installfolder = config['SETTINGS'].get('install_location')
@@ -277,88 +282,16 @@ def save_exe_selection(gid, exe):
 
 def get_exe_selection(gid):
     installfolder = config['SETTINGS'].get('install_location')
-    destination = f"{installfolder}/{gid}/.installed"
+    game_data = fetch_game_info("NULL", "NULL", gid)  # Assuming fetch_game_info exists and returns a dictionary
+    game_name = game_data['title']
+    destination = f"{installfolder}/Installations/({gid}){game_name}/gamevault-exec"
+
     with open(destination, 'r') as f:
-        return f.read()
-
-#THIS NEEDS A REWORK TO CHECK IF CACHE IS DIFFRENT THEN THE NEW DOWNLOAD
-# def fetch_game_titles(username, password):
-#     # Try to load cached data
-#     if os.path.exists(CACHE_FILE):
-#         with open(CACHE_FILE, "r") as file:
-#             cached_data = json.load(file)
-#         logging.debug("Using cached game titles.")
-#         return cached_data
-
-#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-#     # url = f'{config['SETTINGS'].get('url')}/api/games'
-#     headers = {
-#         'accept': 'application/json',
-#         'Authorization': f'Basic {encoded_credentials}'
-#     }
-#     params = {'sortBy': 'title:ASC'}
-
-#     response = requests.get(f'{config['SETTINGS'].get('url')}/api/games', params=params, headers=headers)
-
-#     if response.status_code == 200:
-#         data = response.json()
-#         games = data['data']
-        
-#         # Cache the fetched data
-#         with open(CACHE_FILE, "w") as file:
-#             json.dump(games, file)
-
-#         return games
-#     else:
-#         logging.debug("Failed to fetch game titles. Status code:", response.status_code)
-#         return None
-
-def get_disk_usage(path):
-    usage = shutil.disk_usage(path)
-    usage_gb = usage.used / (1024 * 1024 * 1024)
-    return usage_gb
-
-def get_disk_free(path):
-    usage = shutil.disk_usage(path)
-    free_gb = usage.free / (1024 * 1024 * 1024)
-    return free_gb
-def get_disk_total(path):
-    usage = shutil.disk_usage(path)
-    total_gb = usage.total / (1024 * 1024 * 1024)
-    return total_gb
-
-# def fetch_game_titles(username, password):
-#     # Try to load cached data
-#     cached_data = {}
-#     if os.path.exists(CACHE_FILE):
-#         with open(CACHE_FILE, "r") as file:
-#             cached_data = json.load(file)
-#         logging.debug("Using cached game titles.")
-
-#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-#     headers = {
-#         'accept': 'application/json',
-#         'Authorization': f'Basic {encoded_credentials}'
-#     }
-#     params = {'sortBy': 'title:ASC'}
-
-#     response = requests.get(f'{config["SETTINGS"].get("url")}/api/games', params=params, headers=headers)
-
-#     if response.status_code == 200:
-#         data = response.json()
-#         games = data['data']
-        
-#         # Check if there's a difference between current and cached data
-#         if games != cached_data:
-#             # Update the cached data
-#             with open(CACHE_FILE, "w") as file:
-#                 json.dump(games, file)
-#             logging.debug("Cached game titles updated.")
-
-#         return games
-#     else:
-#         logging.debug("Failed to fetch game titles. Status code:", response.status_code)
-#         return None
+        for line in f:
+            if 'Executable=' in line:
+                return line.split('Executable=')[1].strip()
+    
+    raise ValueError("Executable not found in the configuration file")
     
 def get_image(username, password, gid, boxart=False):
 
@@ -439,90 +372,19 @@ def get_image(username, password, gid, boxart=False):
             print("Box art image information not found in game data.")
         return None
 
-#UPDATED FUNCTIONS
-# def fetch_game_titles(username, password, online_status=True):
-#     cached_data = {}
-#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-
-#     if os.path.exists(CACHE_FILE):
-#         with open(CACHE_FILE, "r") as file:
-#             cached_data = json.load(file)
-#         logging.debug("Using cached game titles.")
-
-#     if not online_status:
-#         logging.debug("GV Client Offline. Using cached game titles.")
-#         return cached_data
-
-#     # API Call
-#     headers = {'accept': 'application/json', 'Authorization': f'Basic {encoded_credentials}'}
-#     params = {'sortBy': 'title:ASC'}
-#     response = requests.get(config["SETTINGS"].get("url") + "/api/games", params=params, headers=headers)
-
-#     if response.status_code == 200:
-#         data = response.json().get('data', [])
-
-#         if data != cached_data:
-#             with open(CACHE_FILE, "w") as file:
-#                 json.dump(data, file)
-#             logging.debug("Cached game titles updated.")
-
-#         return data
-#     else:
-#         logging.error(f"Failed to fetch game titles. Status code: {response.status_code}")
-#         return []
-
-# def fetch_game_info(username, password, gid):
-#     # Check if the response is already in the cache
-#     cached_data = load_cache(gid)
-
-
-#     if online_status == False:
-#         logging.debug("GV Client Offline. Using cached game titles.")
-#         return cached_data
-#     elif online_status == True:
-#         encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-#         url = f'{config['SETTINGS'].get('url')}/api/games/{gid}'
-#         headers = {
-#             'accept': 'application/json',
-#             'Authorization': f'Basic {encoded_credentials}'
-#         }
-#         params = {}
-
-#         response = requests.get(url, params=params, headers=headers)
-#         if response.status_code == 200:
-#             data = response.json()
-#             # Cache the response
-#             if data != cached_data:
-#                 save_cache(gid, data)
-#                 logging.debug(f"Cached game data for {gid} updated.")
-#             return data
-#         else:
-#             logging.debug("Failed to fetch game info. Status code:", response.status_code)
-#             return cached_data
-
-
-
-
-# # test_fetch = fetch_game_info(username, keyring.get_password("GameVault-Snake", username),1)
-# fetch_game_info(username, keyring.get_password("GameVault-Snake", username),1)
-
-# # print(test_fetch)
-
-
-
 def fetch_game_titles(username, password, online_status=True):
-    cached_data = {}
+    gid = "game_titles"
+    cached_data = load_cache(gid)
+    
     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as file:
-            cached_data = json.load(file)
-        logging.debug("GV Client Online.Using cached game titles.")
-
+    
+    if cached_data:
+        logging.debug("GV Client Online. Using cached game titles.")
+    
     if not online_status:
         logging.debug("GV Client Offline. Using cached game titles.")
         return cached_data
-
+    
     # API Call
     headers = {'accept': 'application/json', 'Authorization': f'Basic {encoded_credentials}'}
     params = {'sortBy': 'title:ASC'}
@@ -531,10 +393,45 @@ def fetch_game_titles(username, password, online_status=True):
         response.raise_for_status()  # Raise an exception for non-200 status codes
         data = response.json().get('data', [])
         if data != cached_data:
-            with open(CACHE_FILE, "w") as file:
-                json.dump(data, file)
+            save_cache(gid, data)
             logging.debug("Cached game titles updated.")
         return data
     except requests.exceptions.RequestException as e:
         logging.error(f"Failed to fetch game titles: {e}")
         return cached_data
+    
+def start_game(gid):
+    executable = get_exe_selection(gid)
+    print(executable)
+    subprocess.run(executable)
+
+def get_disk_usage(path):
+    usage = shutil.disk_usage(path)
+    usage_gb = usage.used / (1024 * 1024 * 1024)
+    return usage_gb
+
+def get_disk_free(path):
+    usage = shutil.disk_usage(path)
+    free_gb = usage.free / (1024 * 1024 * 1024)
+    return free_gb
+def get_disk_total(path):
+    usage = shutil.disk_usage(path)
+    total_gb = usage.total / (1024 * 1024 * 1024)
+    return total_gb
+
+def toggle_pause(downloader):
+    if downloader.get_status() == "downloading":
+        print(downloader.get_status())
+        downloader.pause()
+    else:
+        downloader.resume()
+def stop_downloader(downloader):
+    downloader.stop()
+
+def notification(title, message):
+        notification = Notify()
+        notification.title = title
+        notification.message = message
+        notification.icon = "bin/img/logo.png"
+        notification.application_name = "GameVault-Snake"
+        notification.send()

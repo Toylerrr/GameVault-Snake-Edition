@@ -12,12 +12,10 @@ from platformdirs import *
 import logging
 import platform
 from CTkMenuBar import *
-from bin.tabview import MyTabView
+from bin.tabview import MyTabView 
 from bin.sidebar import Sidebar
 from bin.menubar import MenuBar
 import dateparser
-
-
 
 
 appname = 'GameVault-Snake Edition'
@@ -102,6 +100,11 @@ class App(customtkinter.CTk):
         dropdown2.add_option(option="Settings Wizard", command=lambda: subprocess.run(["python", "Settings_Wizard.py"]))
         dropdown3 = CustomDropdownMenu(widget=button_3)
         dropdown3.add_option(option="Credits", command=lambda: print("open about here"))
+        if config['SETTINGS'].get('debug') == 'True':
+            button_4 = self.menu.add_cascade("Debug")
+            dropdown4 = CustomDropdownMenu(widget=button_4)
+            dropdown4.add_option(option="Clear Cache", command=lambda: clear_cache())
+ 
 
         def sidebar_callback(gid):
             #Select Game
@@ -109,12 +112,34 @@ class App(customtkinter.CTk):
             self.tab_view.prelabel.destroy()
             self.tab_view.game_window_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
 
-            self.tab_view.game_name.configure(text=game_info["rawg_title"])
-            self.tab_view.description.insert("0.0",game_info["description"])
-            self.tab_view.release_year.configure(text=f"Release Year: {dateparser.parse(game_info["release_date"]).strftime("%Y")}")
-            self.tab_view.rating.configure(text=f"Rating: {game_info["metacritic_rating"]}")
+            self.tab_view.game_name.configure(text=game_info["title"])
+            if game_info["description"]:
+                self.tab_view.description.insert("0.0",game_info["description"])
+            if game_info["release_date"]:
+                self.tab_view.release_year.configure(text=f"Release Year: {dateparser.parse(game_info["release_date"]).strftime("%Y")}")
+            if game_info["metacritic_rating"]:
+                self.tab_view.rating.configure(text=f"Rating: {game_info["metacritic_rating"]}")
+            if game_info["version"]:
+                self.tab_view.version.configure(text=f"Version: {game_info["version"]}")
             img_path = get_image(username, keyring.get_password("GameVault-Snake", username), gid, boxart=True)
             self.tab_view.game_image.configure(light_image=Image.open(img_path))
+
+            if is_installed(gid):
+                self.tab_view.activity_button.configure(text="Play", command=lambda: start_game(gid))
+            elif is_downloaded(gid):
+                print(f"This is downloaded: {is_downloaded(gid)}")
+                print(is_downloaded(gid, file_path=True))
+                self.tab_view.activity_button.configure(text="Install", command=lambda: unzip_game(gid))
+            else:
+                self.tab_view.activity_button.configure(text="Download", command=lambda: start_download(gid))
+            
+            if get_exes(gid):
+                self.tab_view.exe_selector.configure(values=get_exes(gid))
+                self.tab_view.exe_selector.set(get_exe_selection(gid))
+            else:
+                self.tab_view.exe_selector.configure(values=["Install to Play"])
+                self.tab_view.exe_selector.set("Install to Play")            
+            self.tab_view.set("Game")
 
         # self.menu = MenuBar(master=self)
         # self.menu.grid(row=0, column=0, sticky="nsew", columnspan=2)
@@ -125,6 +150,17 @@ class App(customtkinter.CTk):
         self.tab_view.grid(row=1, column=1, sticky="nsew")
         self.tab_view.rowconfigure(0, weight=1)
 
+        # print(f" Online Status is: {online_status} and is loaded: {is_loaded}") #TODO: remove this debug line when done testing and remove is_loaded from everywhere else (is_loaded)
+
+
+
+            
+        #This is here so we can change the tabs    
+        def start_download(gid):
+            self.tab_view.download_game(username, keyring.get_password("GameVault-Snake", username), gid)
+            self.tab_view.set("Downloads")
+        self.after(1, logging.debug, f"Online Status is: {online_status} and is loaded")
+        
     
     def change_appearance_mode_event(self, new_appearance_mode: str):
         customtkinter.set_appearance_mode(new_appearance_mode)

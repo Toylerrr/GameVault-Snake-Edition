@@ -55,6 +55,12 @@ class Sidebar(customtkinter.CTkFrame):
         for game in sorted_games:
             label = customtkinter.CTkButton(self.sidebar_frame, text=f"{game['title']}", corner_radius=0, fg_color="transparent", anchor="w", command=lambda id=game['id']: select_game(id))
             label.grid(row=sorted_games.index(game)+1, column=0, padx=0, pady=0, sticky="ew")
+            if not is_installed(game['id']):
+                 label.configure(text_color="grey")
+            else:
+                label.configure(text_color=("black", "white"))
+        
+
             # if online_status == True:
             #     print("OFFLINE OFFLINE")
             #     if load_cache(game['id']) == None:
