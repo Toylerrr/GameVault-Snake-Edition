@@ -21,6 +21,10 @@ import notifypy
 from notifypy import Notify
 import functools
 notifypy.Notify._selected_notification_system = functools.partial(notifypy.Notify._selected_notification_system, override_windows_version_detection=True)
+import mimetypes
+import customtkinter
+from pypdl import Pypdl
+import aiohttp
 
 
 
@@ -147,30 +151,7 @@ def clear_cache():
         conn.commit()
     logging.debug("Cache cleared successfully.")
 
-def fetch_game_info(username, password, gid):
-    # Check if the response is already in the cache
-    cached_data = load_cache(gid)
-    if cached_data:
-        logging.debug(f"Fetching from game info from cache...{gid}")
-        return cached_data
 
-    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-    url = f'{config['SETTINGS'].get('url')}/api/games/{gid}'
-    headers = {
-        'accept': 'application/json',
-        'Authorization': f'Basic {encoded_credentials}'
-    }
-    params = {}
-
-    response = requests.get(url, params=params, headers=headers)
-    if response.status_code == 200:
-        data = response.json()
-        # Cache the response
-        save_cache(gid, data)
-        return data
-    else:
-        logging.debug("Failed to fetch game info. Status code:", response.status_code)
-        return None
 
 def unzip_game(gid):
     foldername = fetch_game_info("NULL", "NULL", gid)  # Assuming this fetches the game info
@@ -419,14 +400,6 @@ def get_disk_total(path):
     total_gb = usage.total / (1024 * 1024 * 1024)
     return total_gb
 
-def toggle_pause(downloader):
-    if downloader.get_status() == "downloading":
-        print(downloader.get_status())
-        downloader.pause()
-    else:
-        downloader.resume()
-def stop_downloader(downloader):
-    downloader.stop()
 
 def notification(title, message):
         notification = Notify()
@@ -435,3 +408,178 @@ def notification(title, message):
         notification.icon = "bin/img/logo.png"
         notification.application_name = "GameVault-Snake"
         notification.send()
+
+
+
+def save_image(image_data, type=None, gameid=None, username=None):
+    cache_folder = os.path.join(settings_location, "cache")
+
+    if type == "box_art":
+        if gameid:
+            cache_path = os.path.join(cache_folder, gameid, "box_art_image")
+        else:
+            return None
+        
+    elif type == "background_image":
+        if gameid:
+            cache_path = os.path.join(cache_folder, gameid, "BG_image")
+        else:
+            return None
+    
+    elif type == "user_profile_picture":
+        if username:
+            user_profile_folder = os.path.join(cache_folder, "profiles", username)
+            os.makedirs(user_profile_folder, exist_ok=True)
+            cache_path = os.path.join(user_profile_folder, "profile_picture")
+        else:
+            return None
+    
+    # Determine file extension based on image data's MIME type
+    mime_type = "image/png"  # Assuming PNG for this example, you can adjust as needed
+    extension = mimetypes.guess_extension(mime_type)
+    if extension:
+        cache_path += extension
+    
+    # Save the image to the specified cache_path
+    with open(cache_path, "wb") as f:
+        f.write(image_data)
+    
+    return cache_path
+
+def get_user_info(username, password):
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+    headers = {'accept': 'application/json', 'Authorization': f'Basic {encoded_credentials}'}
+    response = requests.get(config["SETTINGS"]["url"] + "/api/users/me", headers=headers)
+    response.raise_for_status()  # Raise an exception for non-200 status codes
+    data = response.json()
+    return data
+
+def get_user_profile_picture(username, password):
+    user_data = get_user_info(username, password)
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+    
+    if user_data:
+        profile_picture_id = user_data.get('profile_picture', {}).get('id')
+        if profile_picture_id:
+            # Get profile picture
+            headers = {'accept': 'application/json', 'Authorization': f'Basic {encoded_credentials}'}
+            response = requests.get(config["SETTINGS"]["url"] + f"/api/images/{profile_picture_id}", headers=headers)
+            response.raise_for_status()  # Raise an exception for non-200 status codes
+            
+            # Debugging: Print response content and headers
+            # print("Response Content:", response.content)
+            # print("Response Headers:", response.headers)
+
+            # Check if response body is empty or not JSON
+            if response.content:
+                image_data = response.content
+                # Save to cache and print image path
+                image_path = save_image(image_data, type="user_profile_picture", username=username)
+                print("Image Path:", image_path)
+                return image_path
+                
+    return None  # Return None if there's an issue or no profile picture data
+
+            
+
+
+
+
+def load_and_place_image(self):
+    user_profile_picture = get_user_profile_picture(username, keyring.get_password("GameVault-Snake", username))
+    if user_profile_picture:
+        
+        # Open the image using PIL
+        img = Image.open(user_profile_picture)
+        # Convert the image to a PhotoImage object
+        photo = customtkinter.CTkImage(light_image=img, dark_image=img, size=(25, 25))
+        # Create a Label to hold the image
+        image_label = customtkinter.CTkLabel(self, image=photo, text="")
+        # Keep a reference to avoid garbage collection
+        image_label.image = photo
+        # Place the label in the upper right corner
+        image_label.place(relx=1.0, rely=0.00, anchor="ne")
+    else:
+        img = Image.open("bin\img\pp_not_found.png")
+        # Convert the image to a PhotoImage object
+        photo = customtkinter.CTkImage(light_image=img, dark_image=img, size=(25, 25))
+        # Create a Label to hold the image
+        image_label = customtkinter.CTkLabel(self, image=photo, text="")
+        # Keep a reference to avoid garbage collection
+        image_label.image = photo
+        # Place the label in the upper right corner
+        image_label.place(relx=1.0, rely=0.00, anchor="ne")
+
+#OLD OLD OLD OLD
+# def fetch_game_info(username, password, gid):
+#     # Check if the response is already in the cache
+#     cached_data = load_cache(gid)
+#     if cached_data:
+#         logging.debug(f"Fetching from game info from cache...{gid}")
+#         return cached_data
+
+#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+#     url = f'{config['SETTINGS'].get('url')}/api/games/{gid}'
+#     headers = {
+#         'accept': 'application/json',
+#         'Authorization': f'Basic {encoded_credentials}'
+#     }
+#     params = {}
+
+#     response = requests.get(url, params=params, headers=headers)
+#     if response.status_code == 200:
+#         data = response.json()
+#         # Cache the response
+#         save_cache(gid, data)
+#         return data
+#     else:
+#         logging.debug("Failed to fetch game info. Status code:", response.status_code)
+#         return None
+
+
+
+def download_file(url, file_path,auth):
+    dl = Pypdl(auth=auth)
+    dl.start(url, file_path=file_path, segments=10, display=True, multisegment=True, block=False, retries=0, overwrite=False)
+
+def fetch_game_info(username, password, gid):
+    # Check if the response is already in the cache
+    cached_data = load_cache(gid)
+    if cached_data:
+        logging.debug(f"Fetching from game info from cache...{gid}")
+        return cached_data
+
+    encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+    url = f"{config['SETTINGS'].get('url')}/api/games/{gid}"
+    headers = {
+        'accept': 'application/json',
+        'Authorization': f'Basic {encoded_credentials}'
+    }
+    params = {}
+
+    response = requests.get(url, params=params, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        # Cache the response
+        save_cache(gid, data)
+        return data
+    else:
+        logging.debug("Failed to fetch game info. Status code:", response.status_code)
+        return None
+
+def download_game_files(username, password, gid):
+    game_info = fetch_game_info(username, password, gid)
+    if not game_info:
+        logging.error("Failed to fetch game information.")
+        return
+    auth = aiohttp.BasicAuth(username, password)
+    download_url = config["SETTINGS"].get("url") + f"/api/games/{gid}/download"
+    game_name = game_info['title']
+    install_location = config['SETTINGS'].get('install_location')
+    download_path = os.path.join(install_location, f"Downloads/({gid}){game_name}.zip")
+
+    # Create the download directory if it doesn't exist
+    os.makedirs(os.path.dirname(download_path), exist_ok=True)
+
+    # Download the file using pypdl
+    download_file(download_url, download_path,auth)
