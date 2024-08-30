@@ -28,10 +28,11 @@ jobs:
         pip install pyinstaller  # Install PyInstaller
 
     - name: Package with PyInstaller
-      run: pyinstaller --onefile main.py  # Adjust main.py to your script's name
+      run: |
+        pyinstaller --onefile main.py --add-data "bin;bin"  # Adjust the command to include the /bin folder
 
     - name: Archive the build
       uses: actions/upload-artifact@v3
       with:
         name: executable
-        path: dist\main.exe  # Adjust the path to match your .exe file
+        path: dist\**\*  # Upload all files in the dist directory
