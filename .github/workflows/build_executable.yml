@@ -19,7 +19,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.x'  # Replace with your Python version
+        python-version: '3.12.1'  # Replace with your desired Python version
 
     - name: Install dependencies
       run: |
@@ -27,10 +27,7 @@ jobs:
         pip install pyinstaller
 
     - name: Package with PyInstaller
-      run: |
-        pyinstaller --onefile main.py  # Adjust this as necessary
-      env:
-        # Any environment variables your script needs
+      run: pyinstaller --onefile main.py  # Adjust this as necessary
 
     - name: Archive the build
       uses: actions/upload-artifact@v3
@@ -38,11 +35,3 @@ jobs:
         name: executable
         path: dist/main  # Adjust the path to match your output executable
 
-    - name: Save the executable as a release asset
-      if: github.event_name == 'push'
-      uses: actions/upload-release-asset@v1
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: dist/main  # Adjust this to your executable path
-        asset_name: main  # Name of your executable
-        asset_content_type: application/octet-stream
