@@ -3,19 +3,15 @@ import requests
 import configparser
 import os
 import json
-from PIL import Image,ImageDraw
+from PIL import Image
 from io import BytesIO
-from pySmartDL import SmartDL
-import patoolib
-import threading
 from platformdirs import *
 import logging
-import platform
 import shutil
 import keyring
 import sqlite3
 import subprocess
-import py7zr
+# import py7zr
 import zipfile
 import notifypy
 from notifypy import Notify
@@ -509,33 +505,6 @@ def load_and_place_image(self):
         image_label.image = photo
         # Place the label in the upper right corner
         image_label.place(relx=1.0, rely=0.00, anchor="ne")
-
-#OLD OLD OLD OLD
-# def fetch_game_info(username, password, gid):
-#     # Check if the response is already in the cache
-#     cached_data = load_cache(gid)
-#     if cached_data:
-#         logging.debug(f"Fetching from game info from cache...{gid}")
-#         return cached_data
-
-#     encoded_credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-#     url = f'{config['SETTINGS'].get('url')}/api/games/{gid}'
-#     headers = {
-#         'accept': 'application/json',
-#         'Authorization': f'Basic {encoded_credentials}'
-#     }
-#     params = {}
-
-#     response = requests.get(url, params=params, headers=headers)
-#     if response.status_code == 200:
-#         data = response.json()
-#         # Cache the response
-#         save_cache(gid, data)
-#         return data
-#     else:
-#         logging.debug("Failed to fetch game info. Status code:", response.status_code)
-#         return None
-
 
 
 def download_file(url, file_path,auth):
