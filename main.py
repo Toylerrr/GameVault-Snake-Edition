@@ -1,12 +1,9 @@
-import tkinter as tk
-from tkinter import filedialog
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image
 import customtkinter
 from bin.util import *
 import keyring
 import configparser
 # from Settings_Wizard import InstallWizard
-import threading
 import subprocess
 from platformdirs import *
 import logging
