@@ -6,7 +6,7 @@ If you like GameVault, consider donating to support the developers. They work ha
 - GitHub Sponsors: [Phalcode](https://github.com/sponsors/Phalcode)
 - Ko-fi: [Phalcode](https://ko-fi.com/phalcode)
 - Liberapay: [Phalcode](https://liberapay.com/phalcode)
-- GV+: Coming soon https://gamevau.lt/blog/2024/03/28/
+- GV+: [GV+](https://gamevau.lt/docs/gamevault-plus/introduction/)
 
 
 ![image](https://github.com/Toylerrr/GameVault-Snake-Edition/assets/4400902/a63a0cc6-fd5a-4e1a-bd59-6dc6c4cb6866)
@@ -23,20 +23,6 @@ GameVault Snake Edition is my open-source Python launcher designed for the GameV
 - **Dynamic Content:** Retrieves game titles and information dynamically from the Gamevault server then caches it. 
 - **Appearance Customization:** Supports customization of color themes and appearance modes. Create your own: https://github.com/Akascape/CTkThemeMaker
 - **Download:** Current single download is working.
-
-## Things that dont work
-- **Server Management:** You still must have a windows computer to manage the server
-- **Game Remapping:** This client cant remap games to RAWG ids
-- **User Page:** This client doesnt have any user page with whats being played
-- **Playtime counter:** It doesnt track playtime as I didnt want to figure out a way to have it track time
-
-
-## Functionality: To be added
-- Image replacement 
-- Multidownload and download managment page
-- Better setting menu
-- Detect Appdata folder on multi OS (instead of all settings and cache living next to the main file)
-- Background of games (Currently disabled due to long startup time and issues with tkinker)
 
 
 ## Steamdeck
