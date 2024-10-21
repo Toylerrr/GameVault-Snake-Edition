@@ -9,7 +9,8 @@ If you like GameVault, consider donating to support the developers. They work ha
 - GV+: [GV+](https://gamevau.lt/docs/gamevault-plus/introduction/)
 
 
-![image](https://github.com/Toylerrr/GameVault-Snake-Edition/assets/4400902/a63a0cc6-fd5a-4e1a-bd59-6dc6c4cb6866)
+
+![image](https://github.com/user-attachments/assets/44baa69b-66f9-4a1e-8343-065c86a99261)
 
 
 ## Overview
