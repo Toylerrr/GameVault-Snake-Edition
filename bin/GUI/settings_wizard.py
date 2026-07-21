@@ -62,11 +62,15 @@ class InstallWizard(customtkinter.CTkToplevel):
         frame = customtkinter.CTkFrame(self, fg_color="transparent")
         frame.pack(padx=20, pady=20)
 
-        def validate_url():
-            # customtkinter can call validatecommand at construction
-            # time, before the entry is fully built. Guard against
-            # that with a hasattr check — calling it on a half-built
-            # dialog raises AttributeError on first run.
+        def validate_url(_event=None):
+            # Bound to <KeyRelease> instead of Tk's `validate="key"`
+            # mechanism. CTkEntry doesn't fully implement tkinter's
+            # `validate` arg — the validator runs but the entry can
+            # end up rejecting keystrokes (the user can't type
+            # anything). <KeyRelease> is a regular event handler that
+            # runs after the textvariable has already been updated,
+            # so the validator sees the new value and only changes
+            # the fg_color, never the text content.
             if not hasattr(self, "GV_URL"):
                 return False
             url = self.GV_URL.get()
@@ -83,10 +87,15 @@ class InstallWizard(customtkinter.CTkToplevel):
         stored_url = config['SETTINGS'].get('url', '')
         self.GV_URL = customtkinter.CTkEntry(
             frame, placeholder_text="GameVault URL IE: http://127.0.0.1:8080",
-            validate="key", validatecommand=validate_url, width=350,
+            width=350,
         )
         if stored_url:
             self.GV_URL.insert(0, stored_url)
+        # Run the validator on every keystroke (KeyRelease fires
+        # after the textvariable is updated) and on initial focus
+        # so the entry color reflects the current value.
+        self.GV_URL.bind("<KeyRelease>", validate_url, add="+")
+        self.GV_URL.bind("<FocusIn>", validate_url, add="+")
         self.GV_URL.grid(row=1, columnspan=2, pady=10, sticky="ew")
 
         # Username Entry
