@@ -4,13 +4,12 @@ import os
 import sys
 import subprocess
 from PIL import Image
-import keyring
 import logging
 from tkfeather import Feather
 
 from bin.util import (
     config, settings_file, appname, appauthor, check_url_health,
-    resource_path,
+    resource_path, _set_keyring_password,
 )
 
 # Ensure settings directory exists. Kept here because the wizard
@@ -182,7 +181,16 @@ class InstallWizard(customtkinter.CTkToplevel):
             self.GV_URL.configure(fg_color='red')
             return
 
-        keyring.set_password("GameVault-Snake", username, password)
+        # Store the password in the OS keyring. On a clean
+        # Windows machine without a recommended backend
+        # installed, this raises `NoKeyringError` — the helper
+        # catches that and returns False. We still proceed with
+        # saving the rest of the settings (URL, install
+        # location) and let the launcher boot; the user just
+        # won't be auto-logged-in on subsequent launches. We
+        # surface the warning in the success label rather than
+        # silently dropping it.
+        keyring_ok = _set_keyring_password(password)
 
         config.set('SETTINGS', 'username', username)
         config.set('SETTINGS', 'install_location', installoc)
@@ -211,10 +219,24 @@ class InstallWizard(customtkinter.CTkToplevel):
         # appearance/theme modules (which are read at import
         # time in some places) take effect without a manual
         # close-and-reopen.
-        self.close_label.configure(
-            text="Settings saved! Restarting the launcher…",
-            text_color="white",
-        )
+        if keyring_ok:
+            self.close_label.configure(
+                text="Settings saved! Restarting the launcher…",
+                text_color="white",
+            )
+        else:
+            # Keyring write failed (likely no backend on this
+            # machine). Settings saved, but the password isn't
+            # persisted — the user will need to log in manually
+            # next launch. We still restart, since the URL and
+            # install location are valid.
+            self.close_label.configure(
+                text=("Settings saved! (Note: your OS keyring "
+                      "is unavailable, so you'll need to log "
+                      "in again on next launch.) Restarting "
+                      "the launcher…"),
+                text_color="orange",
+            )
         # Update the window so the user sees the new label
         # before we kill the process. Without this, the new
         # label is set in the Tk queue but never rendered

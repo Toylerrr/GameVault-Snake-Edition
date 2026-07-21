@@ -101,10 +101,72 @@ if config['SETTINGS'].get('debug') == 'True':
     logging.debug("Debug logging enabled; writing to %s", log_path)
 
 
+def _get_keyring_password():
+    """Read the GameVault password from the OS keyring.
+
+    Returns None on any failure (no backend installed, locked
+    vault, no entry yet). The launcher should still boot when
+    this returns None — the first-run wizard will set the
+    password on submit, and logged-in users have the JWT in
+    memory, so a missing keyring entry is not fatal.
+
+    Why a helper rather than inlining the try/except at every
+    call site: the launcher's bundled `.exe` is shipped to
+    fresh Windows machines that don't have a recommended
+    keyring backend (e.g. on a clean VM the user gets a
+    `keyring.errors.NoKeyringError` and the bundle dies at
+    import time). Wrapping once lets every call site degrade
+    the same way.
+    """
+    if not USERNAME:
+        return None
+    try:
+        return keyring.get_password("GameVault-Snake", USERNAME)
+    except Exception as e:
+        # `NoKeyringError` is the common case on a clean Windows
+        # install. Other exceptions (locked vault, backend
+        # misconfig) are possible too. Log once at WARNING
+        # rather than ERROR — the launcher can still run, it
+        # just can't auto-login. The user will see the login
+        # prompt.
+        logging.warning(
+            "Could not read password from OS keyring (%s: %s). "
+            "Auto-login disabled; you'll need to log in again.",
+            type(e).__name__, e,
+        )
+        return None
+
+
+def _set_keyring_password(new_password):
+    """Store the GameVault password in the OS keyring.
+
+    Mirrors `_get_keyring_password`: returns True on success,
+    False (with a logged warning) if the backend is missing or
+    rejects the write. Used by the first-run wizard — if keyring
+    is unavailable there, the wizard should still complete
+    (settings save) and surface the warning to the user.
+    """
+    try:
+        keyring.set_password("GameVault-Snake", USERNAME, new_password)
+        return True
+    except Exception as e:
+        logging.warning(
+            "Could not write password to OS keyring (%s: %s). "
+            "Your password was NOT saved. You'll need to enter "
+            "it again on next launch.",
+            type(e).__name__, e,
+        )
+        return False
+
+
 # Get values from config
 USERNAME = config['SETTINGS'].get('username')
 username = USERNAME  # lowercase alias for compatibility
-PASSWORD = keyring.get_password("GameVault-Snake", username)
+# Read the password from keyring defensively. On a clean
+# machine without a recommended keyring backend installed, this
+# raises `NoKeyringError` and would crash the bundle at import
+# time — see `_get_keyring_password` docstring for why we wrap.
+PASSWORD = _get_keyring_password()
 
 install_location = config['SETTINGS'].get('install_location')
 url = config['SETTINGS'].get('url')
@@ -312,7 +374,7 @@ def refresh_jwt_token_with_refresh():
 def _relogin_with_keyring():
     """Last-resort recovery: re-login using the username/password stored in keyring."""
     username = config['SETTINGS'].get('username')
-    password = keyring.get_password("GameVault-Snake", username) if username else None
+    password = _get_keyring_password() if username else None
     if username and password:
         return refresh_jwt_token(username, password)
     return False
@@ -727,7 +789,7 @@ def fetch_game_titles():
 
     # Get cached credentials from keyring
     username = config['SETTINGS'].get('username')
-    password = keyring.get_password("GameVault-Snake", username)
+    password = _get_keyring_password()
 
     # First, refresh JWT token if credentials exist
     if username and password:
@@ -2227,7 +2289,7 @@ def get_download_info_for_gid(gid):
     """
     # Get credentials from keyring
     username = config['SETTINGS'].get('username')
-    password = keyring.get_password("GameVault-Snake", username)
+    password = _get_keyring_password()
 
     # Refresh JWT token
     refresh_jwt_token(username, password)

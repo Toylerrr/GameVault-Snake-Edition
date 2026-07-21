@@ -67,6 +67,19 @@ jobs:
         #   - CTkMessagebox: 5 button-state icons in icons/
         #   - customtkinter: blue/green/dark-blue theme JSONs
         #
+        # `--collect-submodules keyring` is needed because
+        # keyring uses lazy importlib-based backend discovery
+        # (`keyring.core.get_keyring_class` walks the
+        # `keyring.backends` package at runtime). PyInstaller's
+        # default analysis misses these dynamic imports, so
+        # without this flag the bundled `.exe` crashes on
+        # import with `NoKeyringError: No recommended backend
+        # was available.` even on machines that have a backend
+        # installed. This doesn't install a backend on the
+        # user's machine — that's outside PyInstaller's scope —
+        # but it ensures the backends that ARE installed are
+        # visible to keyring inside the bundle.
+        #
         # The command is on a single line because `run: |` uses
         # PowerShell on windows-latest, and `^` (cmd.exe line
         # continuation) is a unary operator in PowerShell — it
@@ -75,7 +88,7 @@ jobs:
         # Backtick `` ` `` would also work but is fragile across
         # PowerShell versions. A single line is the most portable
         # option and is short enough to read.
-        run: pyinstaller --onefile --name "GameVault-Snake-Edition" --add-data "bin;bin" --add-data "bin/img;bin/img" --hidden-import "PIL._tkinter_finder" --collect-data tkfeather --collect-data CTkMessagebox --collect-data customtkinter main.py
+        run: pyinstaller --onefile --name "GameVault-Snake-Edition" --add-data "bin;bin" --add-data "bin/img;bin/img" --hidden-import "PIL._tkinter_finder" --collect-data tkfeather --collect-data CTkMessagebox --collect-data customtkinter --collect-submodules keyring main.py
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -143,6 +156,13 @@ jobs:
         # and CTkMessagebox), you have to ask explicitly.
         # Without these flags, the Settings Wizard crashes on
         # first run with a missing-icon FileNotFoundError.
+        #
+        # `--collect-submodules keyring` ensures keyring's
+        # lazy-imported backend modules are visible to the
+        # frozen bundle's runtime backend discovery. Without
+        # it, even on a Linux desktop with the `SecretService`
+        # backend installed, the bundle would crash with
+        # `NoKeyringError` at module-import time.
         run: |
           pyinstaller --onefile \
             --name "GameVault-Snake-Edition" \
@@ -152,6 +172,7 @@ jobs:
             --collect-data tkfeather \
             --collect-data CTkMessagebox \
             --collect-data customtkinter \
+            --collect-submodules keyring \
             main.py
 
       - name: Make binary executable

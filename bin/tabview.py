@@ -7,7 +7,6 @@ import notifypy
 import functools
 notifypy.Notify._selected_notification_system = functools.partial(notifypy.Notify._selected_notification_system, override_windows_version_detection=True)
 from PIL import Image
-import keyring
 
 
 install_dir = config['SETTINGS'].get('install_location')
