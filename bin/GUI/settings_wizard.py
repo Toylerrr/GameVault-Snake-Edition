@@ -150,6 +150,24 @@ class InstallWizard(customtkinter.CTkToplevel):
         installoc = self.install_location.get()
         url = self.GV_URL.get()
 
+        # Validate the URL one more time on submit. The
+        # per-keystroke validator turns the entry red/green,
+        # but it doesn't block submit — a user could type a
+        # working URL, have it go green, then change it to
+        # something broken without the keystroke validator
+        # firing on the final value. The submit-time check
+        # catches that and refuses to save a broken URL.
+        # We do this rather than `if not check_url_health(url)`
+        # so the failure message is shown to the user instead
+        # of silently rejected.
+        if not check_url_health(url):
+            self.close_label.configure(
+                text="URL did not respond. Fix the URL (red entry) and try again.",
+                text_color="red",
+            )
+            self.GV_URL.configure(fg_color='red')
+            return
+
         keyring.set_password("GameVault-Snake", username, password)
 
         config.set('SETTINGS', 'username', username)
@@ -174,7 +192,8 @@ class InstallWizard(customtkinter.CTkToplevel):
         self._submitted = True
 
         self.close_label.configure(
-            text="Settings saved! Close and reopen to launch GameVault-Snake Edition."
+            text="Settings saved! Close and reopen to launch GameVault-Snake Edition.",
+            text_color="white",
         )
 
     def _on_destroy(self, _event=None):

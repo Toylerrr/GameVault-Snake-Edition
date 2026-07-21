@@ -201,9 +201,27 @@ def get_auth_headers(auth_method='jwt'):
     }
 
 def ensure_url_protocol(url):
-    """Ensure URL has a protocol (http:// or https://)."""
-    if not url:
-        return 'https://gamevaultapi.xyz'  # Default URL
+    """Ensure URL has a protocol (http:// or https://).
+
+    Returns the normalized URL string, or `None` if the input is
+    empty. Callers must check for `None` and bail out cleanly
+    (return an empty list, fail the auth attempt, etc.) — the
+    Settings Wizard's `validate_url` is the only place that
+    should be sending requests to a not-yet-configured server.
+
+    Historically this function returned a hard-coded default
+    URL (`https://gamevaultapi.xyz`) when the input was empty.
+    That was the wrong default: it sent the launcher's first-
+    run API calls to a server the user never configured, which
+    silently failed with connection errors and left the user
+    wondering why the launcher "doesn't work". The right
+    behaviour is to fail loud — return None — and let main.py's
+    first-run wizard catch the unconfigured case at the UI
+    layer (it pops the Settings Wizard before any of these
+    functions get called on a fresh install).
+    """
+    if not url or not url.strip():
+        return None
     url = url.strip()
     if not (url.startswith('http://') or url.startswith('https://')):
         logging.warning(f"URL missing protocol, adding https://: {url}")
@@ -214,8 +232,13 @@ def refresh_jwt_token(username, password):
     """Log in via basic auth and store both access and refresh tokens."""
     global JWT_TOKEN, JWT_REFRESH
     try:
-        # Ensure URL has protocol
+        # Ensure URL has protocol. If unset, ensure_url_protocol
+        # returns None and we bail — the Settings Wizard is
+        # responsible for catching the unconfigured case.
         base_url = ensure_url_protocol(config['SETTINGS'].get('url'))
+        if not base_url:
+            logging.debug("refresh_jwt_token: no URL configured, skipping")
+            return False
         url = f"{base_url}/api/auth/basic/login"
         response = requests.get(url, auth=(username, password), timeout=30)
         if response.status_code == 200:
@@ -254,7 +277,12 @@ def refresh_jwt_token_with_refresh():
     if not JWT_REFRESH:
         return False
     try:
+        # Bail if no URL configured. ensure_url_protocol returns
+        # None when the user hasn't filled in a URL yet.
         base_url = ensure_url_protocol(config['SETTINGS'].get('url'))
+        if not base_url:
+            logging.debug("refresh_jwt_token_with_refresh: no URL configured, skipping")
+            return False
         url = f"{base_url}/api/auth/refresh"
         response = requests.post(
             url,
@@ -710,8 +738,14 @@ def fetch_game_titles():
         logging.debug("Using cached game titles")
         return cached_data['data']
 
-    # Ensure URL has protocol
+    # Ensure URL has protocol. If unset, return the cache (or an
+    # empty list) rather than hitting a hard-coded default URL.
+    # The first-run wizard is responsible for catching the
+    # unconfigured case at the UI layer.
     base_url = ensure_url_protocol(config['SETTINGS'].get('url'))
+    if not base_url:
+        logging.debug("fetch_game_titles: no URL configured")
+        return cached_data['data'] if cached_data else []
 
     # If online, fetch new titles
     if online_status:
@@ -1919,7 +1953,11 @@ def get_box_art(gid):
 
         # Cold path: download from GameVault /api/media/{id} endpoint.
         # Use the request() wrapper so 401s auto-refresh the JWT.
+        # Bail if no URL configured.
         base_url = ensure_url_protocol(config['SETTINGS'].get('url'))
+        if not base_url:
+            logging.debug("get_box_art: no URL configured")
+            return None
         media_url = f"{base_url}/api/media/{image_id}"
         logging.debug(f"get_box_art: requesting {media_url}")
 
@@ -2187,8 +2225,6 @@ def get_download_info_for_gid(gid):
     Returns:
         tuple: (download_url, download_path, filename) or (None, None, None) on error
     """
-    ensure_url_protocol(config['SETTINGS'].get('url'))
-
     # Get credentials from keyring
     username = config['SETTINGS'].get('username')
     password = keyring.get_password("GameVault-Snake", username)
