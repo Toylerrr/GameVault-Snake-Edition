@@ -56,13 +56,16 @@ jobs:
         # `--hidden-import PIL._tkinter_finder` is the well-known
         # Pillow fix — without it, image rendering can fail
         # silently in the bundled app.
-        run: |
-          pyinstaller --onefile ^
-            --name "GameVault-Snake-Edition" ^
-            --add-data "bin;bin" ^
-            --add-data "bin/img;bin/img" ^
-            --hidden-import "PIL._tkinter_finder" ^
-            main.py
+        #
+        # The command is on a single line because `run: |` uses
+        # PowerShell on windows-latest, and `^` (cmd.exe line
+        # continuation) is a unary operator in PowerShell — it
+        # parses the next `--name` as a flag-with-no-arg and
+        # errors with "Missing expression after unary operator".
+        # Backtick `` ` `` would also work but is fragile across
+        # PowerShell versions. A single line is the most portable
+        # option and is short enough to read.
+        run: pyinstaller --onefile --name "GameVault-Snake-Edition" --add-data "bin;bin" --add-data "bin/img;bin/img" --hidden-import "PIL._tkinter_finder" main.py
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
