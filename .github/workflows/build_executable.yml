@@ -56,6 +56,16 @@ jobs:
         # `--hidden-import PIL._tkinter_finder` is the well-known
         # Pillow fix — without it, image rendering can fail
         # silently in the bundled app.
+        # `--collect-data` packages the non-Python data files
+        # (icons, themes, JSON assets) that ship alongside the
+        # listed packages. PyInstaller only bundles .py/.pyc by
+        # default; for packages whose runtime looks up assets
+        # via Path(__file__).parent / 'icons' (like tkfeather
+        # and CTkMessagebox), you have to ask explicitly. We
+        # bundle the three packages we know have data deps:
+        #   - tkfeather: 287 feather icon PNGs in icons/
+        #   - CTkMessagebox: 5 button-state icons in icons/
+        #   - customtkinter: blue/green/dark-blue theme JSONs
         #
         # The command is on a single line because `run: |` uses
         # PowerShell on windows-latest, and `^` (cmd.exe line
@@ -65,7 +75,7 @@ jobs:
         # Backtick `` ` `` would also work but is fragile across
         # PowerShell versions. A single line is the most portable
         # option and is short enough to read.
-        run: pyinstaller --onefile --name "GameVault-Snake-Edition" --add-data "bin;bin" --add-data "bin/img;bin/img" --hidden-import "PIL._tkinter_finder" main.py
+        run: pyinstaller --onefile --name "GameVault-Snake-Edition" --add-data "bin;bin" --add-data "bin/img;bin/img" --hidden-import "PIL._tkinter_finder" --collect-data tkfeather --collect-data CTkMessagebox --collect-data customtkinter main.py
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -125,12 +135,23 @@ jobs:
         # Note: `--add-data` separator on Linux is `:`, not `;`.
         # Same flag, different separator — that's the only
         # difference from the Windows command.
+        # `--collect-data` packages the non-Python data files
+        # (icons, themes, JSON assets) that ship alongside the
+        # listed packages. PyInstaller only bundles .py/.pyc by
+        # default; for packages whose runtime looks up assets
+        # via Path(__file__).parent / 'icons' (like tkfeather
+        # and CTkMessagebox), you have to ask explicitly.
+        # Without these flags, the Settings Wizard crashes on
+        # first run with a missing-icon FileNotFoundError.
         run: |
           pyinstaller --onefile \
             --name "GameVault-Snake-Edition" \
             --add-data "bin:bin" \
             --add-data "bin/img:bin/img" \
             --hidden-import "PIL._tkinter_finder" \
+            --collect-data tkfeather \
+            --collect-data CTkMessagebox \
+            --collect-data customtkinter \
             main.py
 
       - name: Make binary executable
