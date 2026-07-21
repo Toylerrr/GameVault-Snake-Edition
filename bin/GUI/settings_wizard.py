@@ -1,6 +1,8 @@
 import customtkinter
 from tkinter import filedialog
 import os
+import sys
+import subprocess
 from PIL import Image
 import keyring
 import logging
@@ -63,14 +65,16 @@ class InstallWizard(customtkinter.CTkToplevel):
         frame.pack(padx=20, pady=20)
 
         def validate_url(_event=None):
-            # Bound to <KeyRelease> instead of Tk's `validate="key"`
-            # mechanism. CTkEntry doesn't fully implement tkinter's
-            # `validate` arg — the validator runs but the entry can
-            # end up rejecting keystrokes (the user can't type
-            # anything). <KeyRelease> is a regular event handler that
-            # runs after the textvariable has already been updated,
-            # so the validator sees the new value and only changes
-            # the fg_color, never the text content.
+            # Bound to <FocusOut> rather than <KeyRelease>. Each
+            # keystroke would otherwise fire a network call to
+            # check_url_health, which feels laggy on slower
+            # connections — typing 30 chars in a URL would queue
+            # 30 in-flight HTTP requests. <FocusOut> runs once
+            # when the user clicks away from the field, which is
+            # also the natural "I'm done typing this" moment.
+            # Bound via `add="+"` so a future customtkinter
+            # update that adds its own FocusOut handler doesn't
+            # override this one.
             if not hasattr(self, "GV_URL"):
                 return False
             url = self.GV_URL.get()
@@ -91,10 +95,11 @@ class InstallWizard(customtkinter.CTkToplevel):
         )
         if stored_url:
             self.GV_URL.insert(0, stored_url)
-        # Run the validator on every keystroke (KeyRelease fires
-        # after the textvariable is updated) and on initial focus
-        # so the entry color reflects the current value.
-        self.GV_URL.bind("<KeyRelease>", validate_url, add="+")
+        # Run the validator when the user tabs/clicks away from
+        # the field, and on initial focus so the entry color
+        # reflects the current value (green for valid, red for
+        # invalid, default for empty).
+        self.GV_URL.bind("<FocusOut>", validate_url, add="+")
         self.GV_URL.bind("<FocusIn>", validate_url, add="+")
         self.GV_URL.grid(row=1, columnspan=2, pady=10, sticky="ew")
 
@@ -200,10 +205,85 @@ class InstallWizard(customtkinter.CTkToplevel):
         # extra write is cleaner.
         self._submitted = True
 
+        # Update the success label and tell the user what's
+        # about to happen. The launcher restarts itself so
+        # that settings like `install_location` and the
+        # appearance/theme modules (which are read at import
+        # time in some places) take effect without a manual
+        # close-and-reopen.
         self.close_label.configure(
-            text="Settings saved! Close and reopen to launch GameVault-Snake Edition.",
+            text="Settings saved! Restarting the launcher…",
             text_color="white",
         )
+        # Update the window so the user sees the new label
+        # before we kill the process. Without this, the new
+        # label is set in the Tk queue but never rendered
+        # because the process exits immediately.
+        self.update_idletasks()
+        # Brief pause so the user can read the message. 1000ms
+        # is short enough to feel instant, long enough to
+        # register visually. Without this, the launcher
+        # disappears and reappears so fast the user thinks
+        # nothing happened.
+        self.after(1000, self._restart_launcher)
+
+    def _restart_launcher(self):
+        """Spawn a fresh copy of the launcher and exit the
+        current process.
+
+        Why we restart: the launcher's settings (URL, install
+        location, appearance/theme mode) are read at module-
+        import time in several places — bin/util.py reads
+        config['SETTINGS'] at import, main.py:22 calls
+        `customtkinter.set_default_color_theme(...)` at import.
+        Updating the values in the existing process doesn't
+        propagate to all the modules that already snapshotted
+        the old values, so the right way to apply new settings
+        is a fresh process.
+
+        Two paths:
+          - Bundled .exe: sys.executable is the .exe itself.
+            We Popen it with the same args, then exit.
+          - Dev (python main.py): sys.executable is the
+            interpreter. We re-invoke it with the original
+            argv so the new process sees main.py and the
+            same command-line flags.
+
+        `os._exit(0)` is the right exit call here, not
+        `sys.exit(0)`. The latter tries to run cleanup
+        handlers (Tk teardown, etc.) which can hang on
+        Windows when the bundle's temp dir is being torn
+        down. `os._exit` is a hard process termination —
+        exactly what we want, since the new process has
+        already been spawned.
+        """
+        try:
+            if getattr(sys, 'frozen', False):
+                # PyInstaller bundle. sys.executable is the .exe.
+                subprocess.Popen([sys.executable] + sys.argv[1:])
+            else:
+                # Dev. Re-invoke the interpreter with the same
+                # argv as the original process. The new process
+                # will start main.py and the wizard will not
+                # pop up again because first_run is now False.
+                subprocess.Popen([sys.executable] + sys.argv)
+        except Exception as e:
+            logging.error(f"Failed to spawn restart process: {e}")
+            # If the restart fails, just show a hint and let
+            # the user close manually. Better than crashing
+            # silently.
+            self.close_label.configure(
+                text=("Settings saved, but the launcher could "
+                      "not restart itself. Please close and "
+                      "reopen manually."),
+                text_color="red",
+            )
+            return
+        # Give the new process a moment to start before we
+        # exit. Without this, the new process can fail to
+        # acquire the .exe (on Windows, when the running
+        # .exe is still mapped) and crash.
+        self.after(200, lambda: os._exit(0))
 
     def _on_destroy(self, _event=None):
         """Flip `first_run` to False on any close path (submit
