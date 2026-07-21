@@ -52,7 +52,7 @@ class MyTabView(customtkinter.CTkTabview):
         # self.game_window_frame.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
         self.game_window_frame.columnconfigure(2, weight=1)
 
-        self.game_image = customtkinter.CTkImage(size=(200, 300), light_image=Image.open("bin/img/not_found.jpg"))
+        self.game_image = customtkinter.CTkImage(size=(200, 300), light_image=Image.open(resource_path("bin/img/not_found.jpg")))
         self.game_image_label = customtkinter.CTkLabel(self.game_window_frame, image=self.game_image, text="")
         self.game_image_label.grid(row=0, column=0, rowspan=2)
 

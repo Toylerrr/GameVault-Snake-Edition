@@ -82,8 +82,8 @@ class Sidebar(customtkinter.CTkFrame):
         self.logo_frame.pack(side="top", fill="x")
         self.logo_image = customtkinter.CTkImage(
             size=(200, 25),
-            light_image=Image.open("bin/img/GV-dark.png"),
-            dark_image=Image.open("bin/img/GV-light.png"),
+            light_image=Image.open(resource_path("bin/img/GV-dark.png")),
+            dark_image=Image.open(resource_path("bin/img/GV-light.png")),
         )
         self.logo_label = customtkinter.CTkLabel(
             self.logo_frame, image=self.logo_image, text=""
