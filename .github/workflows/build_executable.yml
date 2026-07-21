@@ -1,38 +1,186 @@
 name: Build Executable
 
+# Build on every push to main and on every PR — gives fast feedback
+# on a broken commit. `tags: v*` is the convention for "this is a
+# release" and additionally triggers the `release` job below, which
+# publishes the binaries as a GitHub Release.
+#
+# `workflow_dispatch` lets a maintainer re-run the build from the
+# Actions tab without a push, which is useful when GitHub's runners
+# are flaky.
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel in-progress runs on the same ref. Stops wasted CI minutes
+# when a developer pushes a fixup while the previous commit is
+# still building.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: windows-latest  # Use Windows runner for .exe
+  # ----------------------------------------------------------------
+  # Windows: produces dist/GameVault-Snake-Edition.exe
+  # ----------------------------------------------------------------
+  build-windows:
+    name: Build (Windows)
+    runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12.1'  # Specify the Python version you need
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt  # Install dependencies from requirements.txt
-        pip install pyinstaller  # Install PyInstaller
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.*
 
-    - name: Package with PyInstaller
-      run: |
-        pyinstaller --onefile main.py --add-data "bin;bin"  # Adjust the command to include the /bin folder
+      - name: Build with PyInstaller
+        # `--name` overrides the default `main` to a project-shaped
+        # filename. PyInstaller adds `.exe` on Windows automatically.
+        # `--add-data "bin;bin"` keeps the existing setup; the
+        # explicit nested `bin/img` is defensive against PyInstaller
+        # occasionally missing nested non-Python resource dirs.
+        # `--hidden-import PIL._tkinter_finder` is the well-known
+        # Pillow fix — without it, image rendering can fail
+        # silently in the bundled app.
+        run: |
+          pyinstaller --onefile ^
+            --name "GameVault-Snake-Edition" ^
+            --add-data "bin;bin" ^
+            --add-data "bin/img;bin/img" ^
+            --hidden-import "PIL._tkinter_finder" ^
+            main.py
 
-    - name: Archive the build
-      uses: actions/upload-artifact@v3
-      with:
-        name: executable
-        path: dist\**\*  # Upload all files in the dist directory
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameVault-Snake-Edition-windows
+          path: dist/GameVault-Snake-Edition.exe
+
+  # ----------------------------------------------------------------
+  # Linux: produces dist/GameVault-Snake-Edition (x86_64 binary).
+  # Runs on Steam Deck out of the box.
+  # ----------------------------------------------------------------
+  build-linux:
+    name: Build (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install system dependencies
+        # The ubuntu-latest image doesn't have a display server
+        # installed, and tkinter / customtkinter need X11 client
+        # libs to even import. PyInstaller bundles tkinter inside
+        # the binary, but the build env still needs the .so files
+        # present. On a desktop Linux / Steam Deck these are
+        # already there — this is purely for the build VM.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 \
+            libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 \
+            libxcb-image0 libxcb-render-util0 \
+            libgl1 libegl1
+
+      - name: Install Python dependencies (Linux-safe subset)
+        # The original GameVault client's requirements.txt lists
+        # a few Windows-only deps (pySmartDL, pywin32-ctypes,
+        # win32-setctime) that are not actually imported anywhere
+        # in this codebase — they were left over from a Windows-
+        # only version. Pip will fail when trying to install them
+        # on Linux, so we filter them out before installing. The
+        # rest of the deps install cleanly on Linux.
+        run: |
+          grep -v -E '^(pySmartDL|pywin32-ctypes|win32-setctime)\s*==' \
+            requirements.txt > /tmp/req-linux.txt
+          python -m pip install --upgrade pip
+          pip install -r /tmp/req-linux.txt
+          pip install pyinstaller==6.*
+
+      - name: Build with PyInstaller
+        # Note: `--add-data` separator on Linux is `:`, not `;`.
+        # Same flag, different separator — that's the only
+        # difference from the Windows command.
+        run: |
+          pyinstaller --onefile \
+            --name "GameVault-Snake-Edition" \
+            --add-data "bin:bin" \
+            --add-data "bin/img:bin/img" \
+            --hidden-import "PIL._tkinter_finder" \
+            main.py
+
+      - name: Make binary executable
+        # PyInstaller's --onefile bundles the binary with a
+        # launcher wrapper; on Linux the wrapper sometimes loses
+        # its executable bit during the bundle step. The 7z
+        # download code in bin/util.py:1306-1311 does the same
+        # dance for the auto-downloaded 7z binary — a project-
+        # wide pattern.
+        run: chmod +x dist/GameVault-Snake-Edition
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GameVault-Snake-Edition-linux
+          path: dist/GameVault-Snake-Edition
+
+  # ----------------------------------------------------------------
+  # Release: only runs on tag pushes. Bundles both build artifacts
+  # into a GitHub Release named after the tag.
+  # ----------------------------------------------------------------
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux]
+    # `startsWith(github.ref, 'refs/tags/v')` matches `v1.0.0`,
+    # `v0.1.2-rc1`, etc. Without this `if`, the release job would
+    # also run on every main-branch push and either fail (no
+    # artifacts) or create a release per commit.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    permissions:
+      # `contents: write` is required to create a release.
+      # Default token permissions are read-only since 2023.
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        # `softprops/action-gh-release` is the de-facto standard
+        # for uploading release artifacts. It uses the tag name
+        # as the release title and auto-generates release notes
+        # from the commits since the previous tag.
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/GameVault-Snake-Edition-windows/GameVault-Snake-Edition.exe
+            artifacts/GameVault-Snake-Edition-linux/GameVault-Snake-Edition
+          generate_release_notes: true
+          # Don't overwrite an existing release on re-run — fail
+          # loudly instead, so the maintainer can investigate.
+          fail_on_unmatched_files: true

@@ -5,67 +5,19 @@ from PIL import Image
 import customtkinter
 from bin.util import *
 import keyring
-import configparser
 import logging
 from platformdirs import *
 import platform
+from tkfeather import Feather
 
-# # Set appearance mode and default color theme
-# customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-# customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
-# SETTINGS_FILE = 'settings.ini'
+# Import config values from util module
+from bin.util import config, settings_file, username, install_location, url, appname, appauthor
 
-
-# # Read configuration from file
-# config = configparser.ConfigParser()
-# config.read(SETTINGS_FILE)
-
-# # Get values from config
-# username = config['SETTINGS'].get('username')
-# install_location = config['SETTINGS'].get('install_location')
-# url = config['SETTINGS'].get('url')
-
-
-appname = 'GameVault-Snake Edition'
-appauthor = 'Toylerrr'
-settings_file_name = 'settings.ini'
+# Get settings location from util
 settings_location = user_data_dir(appname, appauthor)
-settings_file = os.path.join(settings_location, settings_file_name)
-
 
 # Ensure settings directory exists
 os.makedirs(settings_location, exist_ok=True)
-
-# Check if settings file exists
-if not os.path.exists(settings_file):
-    # Create ConfigParser instance
-    config = configparser.ConfigParser()
-
-    # Set default values
-    config['SETTINGS'] = {
-        'username': '',
-        'install_location': '',
-        'url': '',
-        'apperance': 'System',
-        'theme': 'blue',
-        'debug': 'False'
-    }
-
-    # Write the default configuration to the file
-    with open(settings_file, 'w') as configfile:
-        config.write(configfile)
-else:
-    # Read configuration from file
-    config = configparser.ConfigParser()
-    config.read(settings_file)
-
-if config['SETTINGS'].get('debug') == 'True':
-    logging.basicConfig(level=logging.DEBUG)
-
-# Get values from config
-username = config['SETTINGS'].get('username')
-install_location = config['SETTINGS'].get('install_location')
-url = config['SETTINGS'].get('url')
 
 
 # Set appearance mode and default color theme
@@ -80,9 +32,9 @@ class InstallWizard(customtkinter.CTk):
         super().__init__(*args, **kwargs)
         self.geometry("400x400")
         self.resizable(False, False)  # Disallow resizing both horizontally and vertically
-        self.title("GameVaut: Snake Edition - Setup")
+        self.title(f"{appname} - Setup")
 
-        image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "img")
+        image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bin/img")
         # Create a frame to contain the widgets
         frame = customtkinter.CTkFrame(self,fg_color="transparent")
         frame.pack(padx=20, pady=20)
@@ -103,9 +55,11 @@ class InstallWizard(customtkinter.CTk):
                 return is_valid
             return False
 
-        # GameVault URL Entry
+        # GameVault URL Entry.
+        # validate="key" runs the validator on every keystroke; "focusout" would
+        # flash red when the user tabs past a valid value.
         stored_url = config['SETTINGS'].get('url', '')  # Get URL or default to None
-        self.GV_URL = customtkinter.CTkEntry(frame, placeholder_text="GameVault URL IE: http://127.0.0.1:8080", validate="focusout", validatecommand=validate_url, width=350)
+        self.GV_URL = customtkinter.CTkEntry(frame, placeholder_text="GameVault URL IE: http://127.0.0.1:8080", validate="key", validatecommand=validate_url, width=350)
         
         if stored_url: 
             self.GV_URL.insert(0, stored_url)  # Insert stored_url if it's not None
@@ -133,7 +87,7 @@ class InstallWizard(customtkinter.CTk):
         self.install_location.grid(row=5, column=0, pady=10, sticky='ew')
 
         # Select Folder Button
-        self.select_location_button = customtkinter.CTkButton(frame, text='📁', command=self.select_install_location,width=30)
+        self.select_location_button = customtkinter.CTkButton(frame, text='',image=Feather('folder').icon, command=self.select_install_location,width=30)
         self.select_location_button.grid(row=5, column=1, padx=(10, 0), pady=10,sticky='w')
 
         # Submit Button
@@ -155,14 +109,17 @@ class InstallWizard(customtkinter.CTk):
         password = self.password.get()
         installoc = self.install_location.get()
         url = self.GV_URL.get()
+
         keyring.set_password("GameVault-Snake", username, password)
-        config = configparser.ConfigParser()
-        config.read(settings_file)
-        config.set('SETTINGS', 'username',username)
-        config.set('SETTINGS', 'install_location',installoc)
-        config.set('SETTINGS', 'url',url)
-        with open('settings.ini', 'w') as configfile:
+
+        config.set('SETTINGS', 'username', username)
+        config.set('SETTINGS', 'install_location', installoc)
+        config.set('SETTINGS', 'url', url)
+
+        # Write to the correct settings file location
+        with open(settings_file, 'w') as configfile:
             config.write(configfile)
+
         self.close_label.configure(text="Settings saved! Close and reopen to launch GameVault-Snake Edition.")
 
 

@@ -166,3 +166,4 @@ settings.ini.old
 cache/
 Auto Py to EXE.json
 .vscode
+.claude
