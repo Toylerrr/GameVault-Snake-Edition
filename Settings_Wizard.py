@@ -1,128 +1,30 @@
-import tkinter as tk
-from tkinter import filedialog
+"""Backward-compatibility shim.
+
+The real implementation moved to `bin/GUI/settings_wizard.py` so
+the Settings Wizard can be opened in-process by the bundled
+launcher (it was previously spawned as a subprocess via
+`subprocess.run(["python", "Settings_Wizard.py"])` in main.py,
+which fails in a PyInstaller --onefile bundle because the bundle
+doesn't ship a Python interpreter).
+
+This shim keeps the old `python Settings_Wizard.py` invocation
+working for developers. It's a 4-line re-export; once the dev
+workflow is on the new path, this file can be removed.
+"""
+import sys
 import os
-from PIL import Image
-import customtkinter
-from bin.util import *
-import keyring
-import logging
-from platformdirs import *
-import platform
-from tkfeather import Feather
-
-# Import config values from util module
-from bin.util import config, settings_file, username, install_location, url, appname, appauthor
-
-# Get settings location from util
-settings_location = user_data_dir(appname, appauthor)
-
-# Ensure settings directory exists
-os.makedirs(settings_location, exist_ok=True)
-
-
-# Set appearance mode and default color theme
-customtkinter.set_appearance_mode(config['SETTINGS'].get('apperance'))  # Modes: "System" (standard), "Dark", "Light"
-customtkinter.set_default_color_theme(config['SETTINGS'].get('theme'))  # Themes: "blue" (standard), "green", "dark-blue"
-
-
-
-
-class InstallWizard(customtkinter.CTk):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.geometry("400x400")
-        self.resizable(False, False)  # Disallow resizing both horizontally and vertically
-        self.title(f"{appname} - Setup")
-
-        image_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "bin/img")
-        # Create a frame to contain the widgets
-        frame = customtkinter.CTkFrame(self,fg_color="transparent")
-        frame.pack(padx=20, pady=20)
-
-        # Image
-        self.logo_image = customtkinter.CTkImage(light_image=Image.open(os.path.join(image_path, "GV-dark.png")), size=(200, 25), dark_image=Image.open(os.path.join(image_path, "GV-light.png")))
-        self.logo_label = customtkinter.CTkLabel(frame, image=self.logo_image, text="")
-        self.logo_label.grid(row=0, columnspan=2, pady=20)
-
-        def validate_url():
-            url = self.GV_URL.get()
-            if url:
-                is_valid = check_url_health(url)
-                if is_valid:
-                    self.GV_URL.configure(fg_color='green')  # Change text color to green for valid URL
-                else:
-                    self.GV_URL.configure(fg_color='red')    # Change text color to red for invalid URL
-                return is_valid
-            return False
-
-        # GameVault URL Entry.
-        # validate="key" runs the validator on every keystroke; "focusout" would
-        # flash red when the user tabs past a valid value.
-        stored_url = config['SETTINGS'].get('url', '')  # Get URL or default to None
-        self.GV_URL = customtkinter.CTkEntry(frame, placeholder_text="GameVault URL IE: http://127.0.0.1:8080", validate="key", validatecommand=validate_url, width=350)
-        
-        if stored_url: 
-            self.GV_URL.insert(0, stored_url)  # Insert stored_url if it's not None
-            logging.debug("Stored URL is not none")
-        self.GV_URL.grid(row=1, columnspan=2, pady=10, sticky="ew")
-
-        # Username Entry
-        stored_username = config['SETTINGS'].get('username', 'Username')  # Get username or default to an empty string
-        self.username = customtkinter.CTkEntry(frame, placeholder_text="Username")
-        if stored_username:
-            logging.debug("Stored username is not none")
-            self.username.insert(0, stored_username)
-        self.username.grid(row=3, columnspan=2, pady=10)
-
-        # Password Entry
-        self.password = customtkinter.CTkEntry(frame, show="*", placeholder_text="Password")
-        self.password.grid(row=4, columnspan=2, pady=10)
-
-        # Install Location Entry
-        stored_install_location = config['SETTINGS'].get('install_location', '')  # Get install location or default to an empty string
-        self.install_location = customtkinter.CTkEntry(frame, placeholder_text="Install Location", width=300)
-        if stored_install_location:
-            logging.debug("Stored install location is not none")
-            self.install_location.insert(0, stored_install_location)
-        self.install_location.grid(row=5, column=0, pady=10, sticky='ew')
-
-        # Select Folder Button
-        self.select_location_button = customtkinter.CTkButton(frame, text='',image=Feather('folder').icon, command=self.select_install_location,width=30)
-        self.select_location_button.grid(row=5, column=1, padx=(10, 0), pady=10,sticky='w')
-
-        # Submit Button
-        self.submit_il = customtkinter.CTkButton(frame, text='Submit', command=self.submit_credentials)
-        self.submit_il.grid(row=6, columnspan=2, pady=10)
-
-        self.close_label = customtkinter.CTkLabel(frame, text="")
-        self.close_label.grid(row=7, columnspan=2, pady=10)
-    
-    def select_install_location(self):
-        folder_selected = filedialog.askdirectory()
-        if folder_selected:
-            self.install_location.delete(0, 'end')
-            self.install_location.insert(0, folder_selected)
-            
-
-    def submit_credentials(self):
-        username = self.username.get()
-        password = self.password.get()
-        installoc = self.install_location.get()
-        url = self.GV_URL.get()
-
-        keyring.set_password("GameVault-Snake", username, password)
-
-        config.set('SETTINGS', 'username', username)
-        config.set('SETTINGS', 'install_location', installoc)
-        config.set('SETTINGS', 'url', url)
-
-        # Write to the correct settings file location
-        with open(settings_file, 'w') as configfile:
-            config.write(configfile)
-
-        self.close_label.configure(text="Settings saved! Close and reopen to launch GameVault-Snake Edition.")
-
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "bin", "GUI")
+))
+from settings_wizard import InstallWizard  # noqa: E402,F401
 
 
 if __name__ == "__main__":
-    InstallWizard().mainloop()
+    # Re-launch the canonical main block. We don't replicate it
+    # here because the canonical path is in settings_wizard.py and
+    # keeping it in one place avoids drift.
+    import runpy
+    runpy.run_path(
+        os.path.join(os.path.dirname(__file__), "bin", "GUI", "settings_wizard.py"),
+        run_name="__main__",
+    )

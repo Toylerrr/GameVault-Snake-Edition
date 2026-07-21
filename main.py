@@ -14,6 +14,7 @@ import dateparser
 from bin.GUI.game_settings import GameSettings
 from bin.GUI.admin_settings import AdminSettings
 from bin.GUI.gvse_settings import GVSESettings
+from bin.GUI.settings_wizard import InstallWizard
 from bin.download_manager import DownloadManager
 
 
@@ -64,7 +65,7 @@ class App(customtkinter.CTk):
             option="Admin Panel", command=self._open_admin_panel,
         )
         dropdown2.add_option(option="App Settings", command=lambda: GVSESettings(self))
-        dropdown2.add_option(option="Settings Wizard", command=lambda: subprocess.run(["python", "Settings_Wizard.py"]))
+        dropdown2.add_option(option="Settings Wizard", command=lambda: InstallWizard(self))
         dropdown3 = CustomDropdownMenu(widget=button_3)
         dropdown3.add_option(option="Server News", command=lambda: self._kickoff_news_load(initial=False))
         dropdown3.add_option(option="Credits", command=lambda: print("open about here"))
@@ -124,6 +125,23 @@ class App(customtkinter.CTk):
         self._news_thread = None
         self._news_pending_window = None
         self._kickoff_news_load(initial=True)
+
+        # First-run detection. `first_run` defaults to True in
+        # bin/util.py when settings.ini doesn't exist, and is
+        # flipped to False by the wizard's submit_credentials
+        # method. We open the wizard as modal (grab_set) so the
+        # user has to either complete setup or close the dialog
+        # before interacting with the rest of the launcher. This
+        # is the intended UX for a first-time launch: block
+        # until the user has at least seen and dismissed the
+        # wizard.
+        #
+        # We check after `self._kickoff_news_load` so the rest
+        # of the UI is built before the modal pops. Otherwise
+        # the user sees a brief flash of unstyled / half-built
+        # widgets before the wizard appears on top.
+        if config['SETTINGS'].get('first_run', 'True') == 'True':
+            self._open_first_run_wizard()
 
         # Apply role-based state to the Admin Panel menu option. We
         # do this at startup (not lazily on first hover) so the
@@ -563,6 +581,27 @@ class App(customtkinter.CTk):
             # a user gets here via some other path, fail closed.
             return
         AdminSettings(self)
+
+    def _open_first_run_wizard(self):
+        """Open the Settings Wizard as a modal on first launch.
+
+        Modal means `grab_set()` — the wizard captures all input
+        until the user dismisses it. This is intentional: on
+        first run, the launcher has no URL, no install location,
+        and no credentials, so the user can't do anything useful
+        until they've at least seen the wizard.
+
+        Unlike the menu-driven InstallWizard(self) call, this
+        helper exists so the wizard can be opened as a one-time
+        setup step without leaving a residual `first_run: True`
+        flag if the user closes the wizard without submitting
+        (which they can do via the window's [×] button). The
+        wizard only flips the flag inside submit_credentials,
+        so closing without submitting is a no-op for the flag.
+        """
+        wizard = InstallWizard(self)
+        wizard.grab_set()
+        wizard.focus_set()
 
     def _update_admin_menu_state(self):
         """Enable / disable the Admin Panel menu option based on

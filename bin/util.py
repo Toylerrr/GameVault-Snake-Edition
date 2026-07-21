@@ -43,7 +43,16 @@ if not os.path.exists(settings_file):
         'url': '',
         'apperance': 'System',
         'theme': 'blue',
-        'debug': 'False'
+        'debug': 'False',
+        # `first_run` flags the freshly-created settings.ini so
+        # main.py can auto-open the Settings Wizard on first
+        # launch. The wizard's `submit_credentials` flips this
+        # to False once the user has saved a URL + install
+        # location. We use an explicit boolean (rather than
+        # checking for an empty `url`) because a user may
+        # intentionally clear their URL later without wanting
+        # the wizard to keep popping up.
+        'first_run': 'True',
     }
 
     # Write the default configuration to the file
