@@ -71,13 +71,14 @@ class Sidebar(customtkinter.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
 
         # --- Logo ---
-        # The sidebar's own fg_color="blue" was set by the App,
-        # so any frame that doesn't set its own fg_color ends up
-        # bright blue. Match the list's dark grey here so the
-        # whole sidebar reads as one colour, and only the entry
-        # + sort menu have any visual contrast.
+        # The sidebar's own fg_color="transparent" is set by the
+        # App, so any frame that doesn't set its own fg_color
+        # ends up showing the App's bg. Match the list by also
+        # setting fg_color="transparent" here, so the whole
+        # sidebar reads as one colour. Only the entry + sort
+        # menu have any visual contrast.
         self.logo_frame = customtkinter.CTkFrame(
-            self, corner_radius=0, fg_color="#2b2b2b",
+            self, corner_radius=0, fg_color="transparent",
         )
         self.logo_frame.pack(side="top", fill="x")
         self.logo_image = customtkinter.CTkImage(
@@ -91,8 +92,14 @@ class Sidebar(customtkinter.CTkFrame):
         self.logo_label.pack(side="top", padx=20, pady=(20, 10), anchor="w")
 
         # --- Controls (filter entry + sort dropdown) ---
+        # `fg_color="transparent"` so the controls inherit the
+        # sidebar's own fg_color (which the App sets per theme).
+        # The previous hard-coded `#2b2b2b` was a dark grey that
+        # stuck out in light mode and never changed when the
+        # user switched themes — the search bar looked like a
+        # dark box floating on the sidebar.
         self.controls_frame = customtkinter.CTkFrame(
-            self, corner_radius=0, fg_color="#2b2b2b",
+            self, corner_radius=0, fg_color="transparent",
         )
         self.controls_frame.pack(side="top", fill="x", padx=10, pady=(0, 8))
         self.controls_frame.grid_columnconfigure(0, weight=1)

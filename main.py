@@ -80,7 +80,7 @@ class App(customtkinter.CTk):
         # `logo_frame` and `controls_frame` are also dark grey, so
         # the entire sidebar reads as one solid colour top-to-
         # bottom.)
-        self.sidebar = Sidebar(master=self, fg_color="#2b2b2b", callback=self.sidebar_callback)
+        self.sidebar = Sidebar(master=self, fg_color="transparent", callback=self.sidebar_callback)
         self.sidebar.grid(row=1, column=0, sticky="nsew")
         self.sidebar.rowconfigure(1, weight=1)
         self.tab_view = MyTabView(master=self, anchor="s", fg_color="transparent")
@@ -1358,7 +1358,7 @@ class App(customtkinter.CTk):
         self.sidebar.destroy()
         self.sidebar = Sidebar(
             master=self,
-            fg_color="#2b2b2b",
+            fg_color="transparent",
             callback=self.sidebar_callback,
             initial_state=state,
         )
