@@ -1,0 +1,50 @@
+# Top-level direct dependencies for the GameVault Snake Edition launcher.
+#
+# This file is consumed by `uv pip compile` to produce the fully-locked
+# `requirements.txt` (committed to the repo). End users install with:
+#
+#     pip install -r requirements.txt
+#
+# and get the same versions the CI builds against.
+#
+# To upgrade after editing this file:
+#
+#     uv pip compile requirements.in -o requirements.txt
+#
+# Why we list fewer packages than the old hand-written requirements.txt:
+#
+# - `darkdetect` is only imported inside `customtkinter`'s internals,
+#   so it's a transitive dep of `customtkinter` and we don't pin it.
+# - `jaraco.classes` / `jaraco.context` / `jaraco.functools` /
+#   `more-itertools` are keyring's transitive deps. The keyring
+#   version we pin below pulls the right versions in automatically.
+# - `aiohttp`, `aiofiles`, `aiosignal`, `aiohappyeyeballs`,
+#   `frozenlist`, `multidict`, `yarl` are pulled in by `pypdl`, which
+#   is itself dead code (not imported anywhere in this project).
+#   The aio* stack and `pypdl` have been removed.
+# - `pySmartDL`, `pywin32-ctypes`, `win32-setctime`, `pypdl`, `loguru`,
+#   and `patool` were not imported anywhere in the project. They were
+#   left over from earlier versions and have been removed.
+#   Note: `notify-py` (PyPI name) is imported as `notifypy` (module
+#   name) in `bin/tabview.py`. The pip package name is `notify-py`.
+# - `configparser` is in the Python stdlib since 3.0; not pinned.
+
+# --- GUI framework ---
+customtkinter
+tkfeather
+CTkMessagebox
+CTkMenuBar
+
+# --- Image handling ---
+Pillow
+
+# --- Auth / OS integration ---
+keyring
+notify-py
+
+# --- HTTP ---
+requests
+
+# --- Paths / dates ---
+platformdirs
+dateparser
