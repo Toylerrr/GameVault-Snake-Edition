@@ -129,19 +129,18 @@ jobs:
             libxcb-image0 libxcb-render-util0 \
             libgl1 libegl1
 
-      - name: Install Python dependencies (Linux-safe subset)
-        # The original GameVault client's requirements.txt lists
-        # a few Windows-only deps (pySmartDL, pywin32-ctypes,
-        # win32-setctime) that are not actually imported anywhere
-        # in this codebase — they were left over from a Windows-
-        # only version. Pip will fail when trying to install them
-        # on Linux, so we filter them out before installing. The
-        # rest of the deps install cleanly on Linux.
+      - name: Install Python dependencies
+        # requirements.txt is now a fully-locked file generated
+        # from requirements.in via `uv pip compile`, so it
+        # installs cleanly on every platform — no Windows-only
+        # deps to filter. (The previous version of this file
+        # listed `pySmartDL`, `pywin32-ctypes`, and
+        # `win32-setctime` as transitive deps; those have all
+        # been removed since none of them were actually
+        # imported in the codebase.)
         run: |
-          grep -v -E '^(pySmartDL|pywin32-ctypes|win32-setctime)\s*==' \
-            requirements.txt > /tmp/req-linux.txt
           python -m pip install --upgrade pip
-          pip install -r /tmp/req-linux.txt
+          pip install -r requirements.txt
           pip install pyinstaller==6.*
 
       - name: Build with PyInstaller
